@@ -1,0 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@700&family=Source+Sans+3:wght@300;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-scuderia-bg: #0E0E10;
+  --color-scuderia-red: #DC2626;
+  --color-scuderia-yellow: #FACC15;
+  --color-quiron-bg: #0F172A;
+  --color-quiron-blue: #005691;
+  --color-adobe-bg: #1E1E1E;
+  --color-adobe-accent: #0066FF;
+  --font-racing: 'Orbitron', sans-serif;
+  --font-clinical: 'Inter', sans-serif;
+  --font-studio: 'Source Sans 3', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #0E0E10;
+  color: white;
+  -webkit-tap-highlight-color: transparent;
+}
