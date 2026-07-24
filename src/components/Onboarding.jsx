@@ -10,14 +10,34 @@ const EQUIPMENT_LIST = [
   { id: 'rope', label: 'Comba', sub: 'Acondicionamiento', img: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&q=80' }
 ];
 
+// Objetivos con claves que usará el App
+const GOALS = [
+  { id: 'recomposicion', name: 'Recomposición Corporal', desc: 'Perder grasa y ganar músculo a la vez' },
+  { id: 'ganar_musculo', name: 'Hipertrofia Pura', desc: 'Maximizar masa muscular' },
+  { id: 'perder_peso', name: 'Pérdida de Grasa Acelerada', desc: 'Mantener músculo en déficit' },
+  { id: 'mantenimiento', name: 'Mantenimiento', desc: 'Conservar tu forma actual' }
+];
+
+// Niveles de actividad
+const ACTIVITY_LEVELS = [
+  { id: 'sedentaria', label: 'Sedentaria', desc: 'Poco o ningún ejercicio' },
+  { id: 'ligera', label: 'Ligera', desc: '1-3 días/semana' },
+  { id: 'moderada', label: 'Moderada', desc: '3-5 días/semana' },
+  { id: 'intensa', label: 'Intensa', desc: '6-7 días/semana' }
+];
+
 export default function Onboarding({ onComplete }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedEquip, setSelectedEquip] = useState(['barbell', 'dumbbells', 'bench']);
   const [formData, setFormData] = useState({
-    goal: 'recomp',
-    days: 4,
+    goal: 'recomposicion',
+    activity: 'moderada',
+    restricciones: '',
     banned: '',
-    favs: ''
+    favs: '',
+    edad: '',
+    peso: '',
+    altura: ''
   });
 
   const toggleEquip = (id) => {
@@ -32,14 +52,10 @@ export default function Onboarding({ onComplete }) {
     // PASO 1: OBJETIVO
     {
       title: "¿Cuál es tu objetivo principal?",
-      sub: "BWS Algorithm personalizará tus rangos de repeticiones y déficit/superávit.",
+      sub: "La IA personalizará tus rangos de repeticiones y déficit/superávit.",
       content: (
         <div className="space-y-3">
-          {[
-            { id: 'recomp', name: 'Recomposicion Corporal', desc: 'Perder grasa y ganar músculo a la vez' },
-            { id: 'hypertrophy', name: 'Hipertrofia Pura', desc: 'Maximizar masa muscular' },
-            { id: 'fatloss', name: 'Pérdida de Grasa Acelerada', desc: 'Mantener músculo en déficit' }
-          ].map((item) => (
+          {GOALS.map((item) => (
             <div 
               key={item.id}
               onClick={() => setFormData({ ...formData, goal: item.id })}
@@ -59,7 +75,96 @@ export default function Onboarding({ onComplete }) {
         </div>
       )
     },
-    // PASO 2: MATERIAL (ESTILO PULSO / BWS)
+    // PASO 2: DATOS PERSONALES
+    {
+      title: "Datos básicos para afinar tu plan",
+      sub: "Esto permite a la IA calcular tus necesidades calóricas y adaptar las recetas.",
+      content: (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] text-gray-400 font-bold block mb-1">Edad</label>
+              <input 
+                type="number" 
+                placeholder="30" 
+                value={formData.edad}
+                onChange={(e) => setFormData({ ...formData, edad: e.target.value })}
+                className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-xs text-white outline-none focus:border-[#00A3E0]"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-400 font-bold block mb-1">Peso (kg)</label>
+              <input 
+                type="number" 
+                placeholder="80" 
+                value={formData.peso}
+                onChange={(e) => setFormData({ ...formData, peso: e.target.value })}
+                className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-xs text-white outline-none focus:border-[#00A3E0]"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] text-gray-400 font-bold block mb-1">Altura (cm)</label>
+            <input 
+              type="number" 
+              placeholder="175" 
+              value={formData.altura}
+              onChange={(e) => setFormData({ ...formData, altura: e.target.value })}
+              className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-xs text-white outline-none focus:border-[#00A3E0]"
+            />
+          </div>
+        </div>
+      )
+    },
+    // PASO 3: NIVEL DE ACTIVIDAD
+    {
+      title: "¿Cuál es tu nivel de actividad física?",
+      sub: "Define tu punto de partida para el cálculo de calorías.",
+      content: (
+        <div className="space-y-3">
+          {ACTIVITY_LEVELS.map((item) => (
+            <div 
+              key={item.id}
+              onClick={() => setFormData({ ...formData, activity: item.id })}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer flex justify-between items-center ${
+                formData.activity === item.id 
+                  ? 'bg-white/10 border-[#0066FF] ring-1 ring-[#0066FF]' 
+                  : 'bg-black/40 border-white/10 opacity-70 hover:opacity-100'
+              }`}
+            >
+              <div>
+                <h4 className="font-extrabold text-sm text-white">{item.label}</h4>
+                <p className="text-[11px] text-gray-400">{item.desc}</p>
+              </div>
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-xs ${formData.activity === item.id ? 'bg-[#0066FF] text-white' : 'border border-white/20 text-transparent'}`}>✓</div>
+            </div>
+          ))}
+        </div>
+      )
+    },
+    // PASO 4: RESTRICCIONES ALIMENTARIAS
+    {
+      title: "Restricciones alimentarias",
+      sub: "Para que las recetas IA nunca incluyan lo que no puedes comer.",
+      content: (
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-bold text-amber-400 block mb-1">🚫 ¿Alguna restricción? (ej: sin lactosa, vegetariano...)</label>
+            <input 
+              type="text" 
+              placeholder="Ej: Sin lactosa, vegetariano, sin frutos secos..." 
+              value={formData.restricciones}
+              onChange={(e) => setFormData({ ...formData, restricciones: e.target.value })}
+              className="w-full bg-black/50 border border-amber-500/30 rounded-xl p-3 text-xs text-white outline-none focus:border-[#00A3E0]"
+            />
+          </div>
+          <div className="text-[10px] text-gray-400 italic">
+            Déjalo en blanco si no tienes restricciones.
+          </div>
+        </div>
+      )
+    },
+    // PASO 5: EQUIPAMIENTO (ESTILO PULSO / BWS)
     {
       title: "¿Qué equipamiento tienes?",
       sub: "Selecciona todo lo que tengas. Si no marcas nada, adaptaremos a peso corporal.",
@@ -93,7 +198,7 @@ export default function Onboarding({ onComplete }) {
         </div>
       )
     },
-    // PASO 3: NUTRICIÓN Y CENSURA DE ALIMENTOS
+    // PASO 6: NUTRICIÓN Y CENSURA DE ALIMENTOS
     {
       title: "Nutrición a tu medida",
       sub: "Para no imponerte comidas molestas. Adherencia 100% garantizada.",
@@ -128,7 +233,24 @@ export default function Onboarding({ onComplete }) {
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
-      onComplete({ ...formData, equipment: selectedEquip });
+      // Construir el objeto final para App.js
+      const profileData = {
+        name: formData.name || '', // Se rellena desde App.js
+        email: '', // Se rellena desde App.js
+        objetivo: formData.goal,               // 'recomposicion', 'ganar_musculo', etc.
+        actividad: formData.activity,           // 'sedentaria', 'ligera', etc.
+        restricciones: formData.restricciones || 'ninguna',
+        edad: parseInt(formData.edad) || 30,
+        peso: parseFloat(formData.peso) || 70,
+        altura: parseInt(formData.altura) || 170,
+        bannedFoods: formData.banned,
+        favFoods: formData.favs,
+        equipment: selectedEquip,
+        // Conservamos compatibilidad con lo anterior
+        goal: formData.goal,
+        days: 4
+      };
+      onComplete(profileData);
     }
   };
 
@@ -176,6 +298,18 @@ export default function Onboarding({ onComplete }) {
           {currentStep === steps.length - 1 ? 'GENERAR MI PLAN IA' : 'CONTINUAR →'}
         </button>
 
+        {/* AVISO LEGAL (recordatorio) */}
+        {currentStep === steps.length - 1 && (
+          <div className="bg-amber-400/10 border border-amber-400/40 rounded-xl p-3 flex items-start gap-2 text-[10px] text-amber-200">
+            <span className="text-base">⚠️</span>
+            <div>
+              <p className="font-bold text-amber-400">Recomendación generada por IA</p>
+              <p className="text-amber-200/80 mt-0.5">
+                Esta app usa inteligencia artificial. Las sugerencias no sustituyen el consejo de un profesional de la salud. Consulta a tu médico o nutricionista antes de realizar cambios importantes.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
