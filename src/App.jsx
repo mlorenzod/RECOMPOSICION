@@ -500,7 +500,18 @@ export default function App() {
       "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&q=80"
       "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=600&q=80"`;
       
-      const result = await model.generateContent(prompt);
+    //  const result = await model.generateContent(prompt);
+    // Antes:
+// const result = await model.generateContent(prompt);
+
+// Después:
+const response = await fetch('/api/gemini', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ prompt, model: 'gemini-1.5-flash' })
+});
+const data = await response.json();
+// data.text contiene la respuesta de Gemini
       const jsonMatch = result.response.text().match(/\{[\s\S]*\}/);
       if(jsonMatch) {
         const generatedWorkouts = JSON.parse(jsonMatch[0]);
