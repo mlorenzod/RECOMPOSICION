@@ -448,43 +448,7 @@ export default function App() {
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const handleMealImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target.result.split(',')[1];
-      processFoodWithGemini({
-        inlineData: { mimeType: file.type || 'image/jpeg', data: base64 }
-      });
-    };
-    reader.readAsDataURL(file);
-    e.target.value = ''; // permite volver a subir el mismo archivo
-  };
-  const handleToggleAudioRecording = async () => {
-    // ...
-  };
-  
-  const handleMealImageUpload = (e) => {  // <--- AÑADE AQUÍ LA FUNCIÓN
-    // ...
-    const handleMealImageUpload = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = event.target.result.split(',')[1];
-        processFoodWithGemini({
-          inlineData: { mimeType: file.type || 'image/jpeg', data: base64 }
-        });
-      };
-      reader.readAsDataURL(file);
-      e.target.value = '';
-    };
-  };
-  
-  const generatePersonalizedRecipe = async () => {
-    // ...
-  };
+
   const [selectedMetric, setSelectedMetric] = useState('waist');
   const [selectedAnalyticsEx, setSelectedAnalyticsEx] = useState('bench');
   const [trackerWeight, setTrackerWeight] = useState(userProfile?.peso || 65.0);
@@ -601,6 +565,57 @@ export default function App() {
       alert("Error procesando los datos. Revisa la consola o tu API Key.");
     } finally {
       setIsScanning(false);
+    }
+  };
+
+  // ========== FUNCIÓN AÑADIDA: handleMealImageUpload ==========
+  const handleMealImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target.result.split(',')[1];
+      processFoodWithGemini({
+        inlineData: { mimeType: file.type || 'image/jpeg', data: base64 }
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+  // =============================================================
+
+  const handleTextFoodSubmit = (e) => { 
+    e.preventDefault(); 
+    if (textFoodInput.trim()) { 
+      processFoodWithGemini(`Procesa: "${textFoodInput}"`); 
+      setTextFoodInput(''); 
+    } 
+  };
+
+  const handleToggleAudioRecording = async () => {
+    if (isRecordingAudio) {
+      if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
+      setIsRecordingAudio(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunksRef.current = [];
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64Audio = reader.result.split(',')[1];
+            processFoodWithGemini({ inlineData: { mimeType: mediaRecorder.mimeType.split(';')[0] || 'audio/webm', data: base64Audio } });
+          };
+          reader.readAsDataURL(audioBlob);
+          stream.getTracks().forEach(track => track.stop());
+        };
+        mediaRecorder.start();
+        setIsRecordingAudio(true);
+      } catch (err) { alert("No se pudo acceder al micrófono."); }
     }
   };
 
