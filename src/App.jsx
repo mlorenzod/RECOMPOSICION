@@ -473,7 +473,7 @@ export default function App() {
   const generateInitialRoutine = async (profileData) => {
     setAuthStep('generating_routine');
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      const apiKey = import.meta.env.GEMINI_API_KEY;
       if (!apiKey) throw new Error("API Key faltante");
       
       const genAI = new GoogleGenerativeAI(apiKey);
@@ -530,7 +530,7 @@ const data = await response.json();
     if (!useCredit()) return;
     setIsScanning(true);
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      const apiKey = import.meta.env.GEMINI_API_KEY;
       if (!apiKey) throw new Error("Falta la variable de entorno VITE_GEMINI_API_KEY.");
       
       const genAI = new GoogleGenerativeAI(apiKey);
@@ -610,7 +610,7 @@ const data = await response.json();
     setRecipeError(null);
     
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      const apiKey = import.meta.env.GEMINI_API_KEY;
       if (!apiKey) throw new Error("API KEY faltante");
       
       const genAI = new GoogleGenerativeAI(apiKey);
@@ -657,7 +657,7 @@ const data = await response.json();
     if (!useCredit()) return;
     setIsAnalyzingStrategy(true);
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      const apiKey = import.meta.env.GEMINI_API_KEY;
       if (!apiKey) throw new Error("API KEY faltante");
       
       const genAI = new GoogleGenerativeAI(apiKey);
