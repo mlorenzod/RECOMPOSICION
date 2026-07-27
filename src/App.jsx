@@ -529,7 +529,6 @@ export default function App() {
       if (typeof promptContent === 'string') {
         parts = [{ text: systemInstruction + '\n' + promptContent }];
       } else if (promptContent && promptContent.inlineData) {
-        // Es una imagen o audio en base64
         parts = [
           { text: systemInstruction },
           { inlineData: { mimeType: promptContent.inlineData.mimeType, data: promptContent.inlineData.data } }
