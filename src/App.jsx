@@ -448,7 +448,30 @@ export default function App() {
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-
+  const handleMealImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target.result.split(',')[1];
+      processFoodWithGemini({
+        inlineData: { mimeType: file.type || 'image/jpeg', data: base64 }
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ''; // permite volver a subir el mismo archivo
+  };
+  const handleToggleAudioRecording = async () => {
+    // ...
+  };
+  
+  const handleMealImageUpload = (e) => {  // <--- AÑADE AQUÍ LA FUNCIÓN
+    // ...
+  };
+  
+  const generatePersonalizedRecipe = async () => {
+    // ...
+  };
   const [selectedMetric, setSelectedMetric] = useState('waist');
   const [selectedAnalyticsEx, setSelectedAnalyticsEx] = useState('bench');
   const [trackerWeight, setTrackerWeight] = useState(userProfile?.peso || 65.0);
