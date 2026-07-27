@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import Onboarding from './components/Onboarding';
 
 // DICCIONARIO DE IMÁGENES GASTRONÓMICAS DE ALTA CALIDAD
@@ -230,7 +229,7 @@ const TROPHY_DEFINITIONS = {
   legend_60: { title: 'The Icon', desc: 'Finaliza los 60 días completos', icon: '✦' }
 };
 
-// ========== CÁLCULO CIENTÍFICO DE MACROS (MIFFLIN-ST JEOR) - DEFINIDO ANTES DE APP ==========
+// ========== CÁLCULO CIENTÍFICO DE MACROS (MIFFLIN-ST JEOR) ==========
 const calculateScienceMacros = (profile) => {
   if (!profile || !profile.peso || !profile.altura || !profile.edad) {
     return { cal: 2000, protein: 140, carbs: 200, fat: 60 };
@@ -381,7 +380,6 @@ export default function App() {
   const [strategyReport, setStrategyReport] = useState(null);
   const [showStrategyModal, setShowStrategyModal] = useState(false);
 
-  // AHORA calculateScienceMacros ESTÁ DEFINIDA, ASÍ QUE ESTO FUNCIONA:
   const targetMacros = calculateScienceMacros(userProfile);
   const currentMacros = dailyNutritionLogs[selectedDay] || { cal: 0, protein: 0, carbs: 0, fat: 0 };
   const calPercentage = Math.min(100, Math.round((currentMacros.cal / targetMacros.cal) * 100));
@@ -469,19 +467,13 @@ export default function App() {
     return true;
   };
 
-  // Funciones de IA (con modelo gemini-3.5-flash-lite)
+  // ================================================================
+  //  FUNCIONES QUE USAN IA (AHORA LLAMAN A /api/gemini)
+  // ================================================================
+
   const generateInitialRoutine = async (profileData) => {
     setAuthStep('generating_routine');
     try {
-      const apiKey = import.meta.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error("API Key faltante");
-      
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ 
-        model: "gemini-3.5-flash-lite",
-        generationConfig: { responseMimeType: "application/json" }
-      });
-      
       const prompt = `Actúa como un Head Coach especialista en hipertrofia basada en evidencia. 
       Diseña una rutina Torso/Pierna (Upper/Lower) de 3 ejercicios por día para un usuario cuyo objetivo es: ${profileData.objetivo || 'Recomposición'}.
       Devuelve SOLO un JSON estricto con esta estructura exacta:
@@ -499,28 +491,28 @@ export default function App() {
       "https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=600&q=80"
       "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&q=80"
       "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=600&q=80"`;
-      
-    //  const result = await model.generateContent(prompt);
-    // Antes:
-// const result = await model.generateContent(prompt);
 
-// Después:
-const response = await fetch('/api/gemini', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ prompt, model: 'gemini-3.5-flash-lite' })
-});
-const data = await response.json();
-// data.text contiene la respuesta de Gemini
-      const jsonMatch = result.response.text().match(/\{[\s\S]*\}/);
-      if(jsonMatch) {
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-3.5-flash-lite',
+          parts: [{ text: prompt }],
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Error en el backend');
+
+      const jsonMatch = data.text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
         const generatedWorkouts = JSON.parse(jsonMatch[0]);
         setWorkouts(generatedWorkouts);
         localStorage.setItem(`user_${profileData.email.replace(/[^a-zA-Z0-9]/g, '_')}_workouts`, JSON.stringify(generatedWorkouts));
       }
-    } catch(err) {
+    } catch (err) {
       console.error("Error al generar rutina IA, cargando rutina base.", err);
-      setWorkouts(null); 
+      setWorkouts(null);
     } finally {
       setAuthStep('app');
     }
@@ -530,31 +522,43 @@ const data = await response.json();
     if (!useCredit()) return;
     setIsScanning(true);
     try {
-      const apiKey = import.meta.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error("Falta la variable de entorno VITE_GEMINI_API_KEY.");
-      
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ 
-        model: "gemini-3.5-flash-lite",
-        generationConfig: { responseMimeType: "application/json" }
-      });
-      
       const systemInstruction = `Analiza la siguiente comida. Devuelve SOLO un JSON estricto sin bloques markdown. Formato:
       {"dishName": "Nombre", "foods": [{"name": "Ingrediente", "grams": 150, "cal": 220, "prot": 25, "carbs": 20, "fat": 8}], "goalFeedback": "Feedback en 10 palabras."}`;
 
-      const parts = [systemInstruction, promptContent];
-      const result = await model.generateContent(parts);
+      let parts = [];
+      if (typeof promptContent === 'string') {
+        parts = [{ text: systemInstruction + '\n' + promptContent }];
+      } else if (promptContent && promptContent.inlineData) {
+        // Es una imagen o audio en base64
+        parts = [
+          { text: systemInstruction },
+          { inlineData: { mimeType: promptContent.inlineData.mimeType, data: promptContent.inlineData.data } }
+        ];
+      } else {
+        throw new Error('Formato de entrada no soportado');
+      }
 
-      const jsonMatch = result.response.text().match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("Invalid response format");
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-3.5-flash-lite',
+          parts,
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Error en el backend');
+
+      const jsonMatch = data.text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Invalid response format');
       
-      const data = JSON.parse(jsonMatch[0]);
-
+      const scanData = JSON.parse(jsonMatch[0]);
       setScanResult({
-        dishName: data.dishName,
+        dishName: scanData.dishName,
         img: (typeof promptContent === 'object' && promptContent.inlineData) ? `data:${promptContent.inlineData.mimeType};base64,${promptContent.inlineData.data}` : null,
-        foods: data.foods,
-        goalFeedback: data.goalFeedback
+        foods: scanData.foods,
+        goalFeedback: scanData.goalFeedback
       });
       setUserXP(prev => prev + 50);
     } catch (error) {
@@ -565,60 +569,12 @@ const data = await response.json();
     }
   };
 
-  const handleTextFoodSubmit = (e) => { e.preventDefault(); if (textFoodInput.trim()) { processFoodWithGemini(`Procesa: "${textFoodInput}"`); setTextFoodInput(''); } };
-
-  const handleToggleAudioRecording = async () => {
-    if (isRecordingAudio) {
-      if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
-      setIsRecordingAudio(false);
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioChunksRef.current = [];
-        const mediaRecorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = mediaRecorder;
-        mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
-        mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64Audio = reader.result.split(',')[1];
-            processFoodWithGemini({ inlineData: { mimeType: mediaRecorder.mimeType.split(';')[0] || 'audio/webm', data: base64Audio } });
-          };
-          reader.readAsDataURL(audioBlob);
-          stream.getTracks().forEach(track => track.stop());
-        };
-        mediaRecorder.start();
-        setIsRecordingAudio(true);
-      } catch (err) { alert("No se pudo acceder al micrófono."); }
-    }
-  };
-
-  const handleMealImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => processFoodWithGemini({ inlineData: { mimeType: file.type || 'image/jpeg', data: event.target.result.replace(/^data:image\/\w+;base64,/, '') } });
-      reader.readAsDataURL(file);
-    }
-    e.target.value = '';
-  };
-
   const generatePersonalizedRecipe = async () => {
     if (!useCredit()) return;
     setIsGeneratingRecipe(true); 
     setRecipeError(null);
     
     try {
-      const apiKey = import.meta.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error("API KEY faltante");
-      
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ 
-        model: "gemini-3.5-flash-lite",
-        generationConfig: { responseMimeType: "application/json" }
-      });
-      
       const neededCal = Math.max(300, targetMacros.cal - currentMacros.cal);
       const neededProt = Math.max(20, targetMacros.protein - currentMacros.protein);
 
@@ -636,9 +592,20 @@ const data = await response.json();
         "chefTip": "Nota nutricional basada en ciencia."
       }`;
 
-      const result = await model.generateContent(prompt);
-      const jsonMatch = result.response.text().match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("Invalid response format");
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-3.5-flash-lite',
+          parts: [{ text: prompt }],
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Error en el backend');
+
+      const jsonMatch = data.text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Invalid response format');
       
       const recipeData = JSON.parse(jsonMatch[0]);
       recipeData.img = selectRecipeImage(recipeData.title, recipeData.ingredients);
@@ -657,22 +624,26 @@ const data = await response.json();
     if (!useCredit()) return;
     setIsAnalyzingStrategy(true);
     try {
-      const apiKey = import.meta.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error("API KEY faltante");
-      
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ 
-        model: "gemini-3.5-flash-lite",
-        generationConfig: { responseMimeType: "application/json" }
-      });
-      
       const prompt = `Actúa como Head Coach. Devuelve SOLO JSON.
       {"summary": "Resumen", "strengths": ["..."], "weaknesses": ["..."], "macroAdjustment": { "cal": ${targetMacros.cal}, "protein": ${targetMacros.protein}, "carbs": ${targetMacros.carbs}, "fat": ${targetMacros.fat}, "reason": "Justificación..." }, "trainingAdjustment": "...", "nutritionTip": "...", "mindsetTip": "..."}`;
-      
-      const result = await model.generateContent(prompt);
-      const jsonMatch = result.response.text().match(/\{[\s\S]*\}/);
-      setStrategyReport(JSON.parse(jsonMatch[0]));
-      setShowStrategyModal(true);
+
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-3.5-flash-lite',
+          parts: [{ text: prompt }],
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Error en el backend');
+
+      const jsonMatch = data.text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        setStrategyReport(JSON.parse(jsonMatch[0]));
+        setShowStrategyModal(true);
+      }
     } catch (err) { 
       console.error(err);
       alert('Error al generar estudio.'); 
@@ -680,6 +651,10 @@ const data = await response.json();
       setIsAnalyzingStrategy(false); 
     }
   };
+
+  // ================================================================
+  //  RESTO DE FUNCIONES (SIN CAMBIOS)
+  // ================================================================
 
   const processAndAlignImage = (sourceImage, targetWidth = 1080) => {
     const targetHeight = (targetWidth * 16) / 9;
@@ -774,9 +749,8 @@ const data = await response.json();
     localStorage.setItem(`${userKey}_workout_plan`, JSON.stringify(plan));
   };
 
-  // Funciones auxiliares para el nuevo plan
   const isTrainingDay = (dayNum) => {
-    const dayOfWeek = ((dayNum - 1) % 7) + 1; // 1=lunes, 7=domingo
+    const dayOfWeek = ((dayNum - 1) % 7) + 1;
     return workoutPlan.days.includes(dayOfWeek);
   };
 
@@ -841,7 +815,6 @@ const data = await response.json();
 
   const isRestDay = restDays[selectedDay];
   const currentWorkoutType = selectedDay % 2 !== 0 ? 'torso' : 'pierna';
-  // Usar los ejercicios del plan si existen, si no, usar el antiguo sistema (por compatibilidad)
   const planExercises = getDayExercises(selectedDay);
   const fallbackExercises = (workouts && workouts[currentWorkoutType]) ? workouts[currentWorkoutType] : [];
   const currentExercises = planExercises.length > 0 ? planExercises : fallbackExercises;
