@@ -467,6 +467,19 @@ export default function App() {
   
   const handleMealImageUpload = (e) => {  // <--- AÑADE AQUÍ LA FUNCIÓN
     // ...
+    const handleMealImageUpload = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target.result.split(',')[1];
+        processFoodWithGemini({
+          inlineData: { mimeType: file.type || 'image/jpeg', data: base64 }
+        });
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    };
   };
   
   const generatePersonalizedRecipe = async () => {
