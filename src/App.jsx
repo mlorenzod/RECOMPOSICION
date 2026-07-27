@@ -508,7 +508,7 @@ export default function App() {
 const response = await fetch('/api/gemini', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ prompt, model: 'gemini-1.5-flash' })
+  body: JSON.stringify({ prompt, model: 'gemini-3.5-flash-lite' })
 });
 const data = await response.json();
 // data.text contiene la respuesta de Gemini
