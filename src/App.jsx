@@ -286,7 +286,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Estado temporal para edición de perfil dentro del modal de Ajustes
   const [editProfile, setEditProfile] = useState(userProfile);
 
   useEffect(() => {
@@ -301,7 +300,6 @@ export default function App() {
   const DEV_EMAIL = 'mlorenzod@gmail.com'; 
   const isDeveloper = userProfile?.email === DEV_EMAIL;
 
-  const [lastResetDate, setLastResetDate] = useState(() => localStorage.getItem(`${userKey}_last_reset`) || new Date().toISOString().split('T')[0]);
   const [startDate] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_reto_start_date`);
     if (saved) return new Date(saved);
@@ -310,6 +308,37 @@ export default function App() {
     return now;
   });
 
+  // ============================================================
+  // LOGICA OPCION B: PRUEBA GRATUITA DE 7 DIAS (FREE TRIAL)
+  // ============================================================
+  const [trialStartDate] = useState(() => {
+    const saved = localStorage.getItem(`${userKey}_trial_start_date`);
+    if (saved) return new Date(saved);
+    const now = new Date();
+    localStorage.setItem(`${userKey}_trial_start_date`, now.toISOString());
+    return now;
+  });
+
+  const [isPro, setIsPro] = useState(() => isDeveloper || localStorage.getItem(`${userKey}_is_pro`) === 'true');
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
+
+  // Cálculo de días transcurridos desde el registro
+  const calculateDaysSinceTrial = () => {
+    const diffTime = Math.abs(new Date() - new Date(trialStartDate));
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const daysSinceTrial = calculateDaysSinceTrial();
+  const trialDaysLeft = Math.max(0, 7 - daysSinceTrial);
+  const isTrialActive = daysSinceTrial < 7;
+
+  // Validación de acceso a funciones IA
+  const verifyAccessOrShowPaywall = () => {
+    if (isPro || isDeveloper || isTrialActive) return true;
+    setShowPaywallModal(true);
+    return false;
+  };
+
   const calculateRealDay = () => {
     const diffTime = Math.abs(new Date() - new Date(startDate));
     return Math.min(60, Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1));
@@ -317,14 +346,6 @@ export default function App() {
 
   const realDay = calculateRealDay();
   const [selectedDay, setSelectedDay] = useState(realDay);
-  
-  const [dailyCredits, setDailyCredits] = useState(() => {
-    const saved = localStorage.getItem(`${userKey}_daily_credits`);
-    return saved !== null ? Number(saved) : 10;
-  });
-
-  const [isPro, setIsPro] = useState(() => isDeveloper || localStorage.getItem(`${userKey}_is_pro`) === 'true');
-  const [showPaywallModal, setShowPaywallModal] = useState(false);
 
   const [workouts, setWorkouts] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_workouts`);
@@ -375,31 +396,17 @@ export default function App() {
   const calPercentage = Math.min(100, Math.round((currentMacros.cal / targetMacros.cal) * 100));
 
   useEffect(() => {
-    const checkMidnightReset = () => {
-      const todayStr = new Date().toISOString().split('T')[0];
-      if (todayStr !== lastResetDate) {
-        setDailyCredits(10); 
-        setLastResetDate(todayStr);
-      }
-    };
-    checkMidnightReset();
-    const interval = setInterval(checkMidnightReset, 60000);
-    return () => clearInterval(interval);
-  }, [lastResetDate]);
-
-  useEffect(() => {
     if (userProfile) {
       localStorage.setItem(`${userKey}_body_logs`, JSON.stringify(bodyLogs));
       localStorage.setItem(`${userKey}_nutrition_logs`, JSON.stringify(dailyNutritionLogs));
       localStorage.setItem(`${userKey}_workout_logs`, JSON.stringify(logs));
       localStorage.setItem(`${userKey}_xp`, userXP.toString());
       localStorage.setItem(`${userKey}_photos`, JSON.stringify(userPhotos));
-      localStorage.setItem(`${userKey}_daily_credits`, dailyCredits.toString());
       localStorage.setItem(`${userKey}_is_pro`, isPro.toString());
       localStorage.setItem(`${userKey}_workout_plan`, JSON.stringify(workoutPlan));
       if (workouts) localStorage.setItem(`${userKey}_workouts`, JSON.stringify(workouts));
     }
-  }, [bodyLogs, dailyNutritionLogs, logs, userXP, userPhotos, dailyCredits, isPro, userKey, userProfile, workoutPlan, workouts]);
+  }, [bodyLogs, dailyNutritionLogs, logs, userXP, userPhotos, isPro, userKey, userProfile, workoutPlan, workouts]);
 
   // Estados Seguimiento Visual y Métricas
   const [showCameraModal, setShowCameraModal] = useState(false);
@@ -446,16 +453,6 @@ export default function App() {
   const [trackerChest, setTrackerChest] = useState('');
   const [trackerArm, setTrackerArm] = useState('');
 
-  const useCredit = () => {
-    if (isPro || isDeveloper) return true;
-    if (dailyCredits <= 0) {
-      setShowPaywallModal(true); 
-      return false;
-    }
-    setDailyCredits(prev => prev - 1);
-    return true;
-  };
-
   const compressImageForAI = (file, maxWidth = 800) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -488,7 +485,6 @@ export default function App() {
     });
   };
 
-  // Guardar Cambios de Perfil desde Ajustes
   const handleSaveProfileSettings = (e) => {
     e.preventDefault();
     localStorage.setItem('active_user_profile', JSON.stringify(editProfile));
@@ -543,7 +539,7 @@ export default function App() {
   };
 
   const processFoodWithGemini = async (promptContent) => {
-    if (!useCredit()) return;
+    if (!verifyAccessOrShowPaywall()) return;
     setIsScanning(true);
     try {
       const systemInstruction = `Analiza la siguiente comida. Devuelve SOLO un JSON estricto sin bloques markdown. Formato exacto:
@@ -595,6 +591,7 @@ export default function App() {
   };
 
   const handleMealImageUpload = async (e) => {
+    if (!verifyAccessOrShowPaywall()) return;
     const file = e.target.files[0];
     if (!file) return;
     try {
@@ -615,6 +612,7 @@ export default function App() {
 
   const handleTextFoodSubmit = (e) => { 
     e.preventDefault(); 
+    if (!verifyAccessOrShowPaywall()) return;
     if (textFoodInput.trim()) { 
       processFoodWithGemini(`Procesa: "${textFoodInput}"`); 
       setTextFoodInput(''); 
@@ -622,6 +620,7 @@ export default function App() {
   };
 
   const handleToggleAudioRecording = async () => {
+    if (!verifyAccessOrShowPaywall()) return;
     if (isRecordingAudio) {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
@@ -698,7 +697,7 @@ export default function App() {
   };
 
   const generatePersonalizedRecipe = async () => {
-    if (!useCredit()) return;
+    if (!verifyAccessOrShowPaywall()) return;
     setIsGeneratingRecipe(true); 
     setRecipeError(null);
     
@@ -749,7 +748,7 @@ export default function App() {
   };
 
   const generateStrategyStudy = async () => {
-    if (!useCredit()) return;
+    if (!verifyAccessOrShowPaywall()) return;
     setIsAnalyzingStrategy(true);
     try {
       const prompt = `Actúa como Head Coach. Devuelve SOLO JSON.
@@ -978,10 +977,10 @@ export default function App() {
           <button onClick={() => setIsDark(!isDark)} className={`p-2.5 ${theme.secondary} rounded-full text-[12px]`}>{isDark ? '☀️' : '🌙'}</button>
           <button onClick={() => setShowSettingsModal(true)} className={`p-2.5 ${theme.secondary} rounded-full text-[12px]`}>⚙️</button>
           <button 
-            onClick={() => !isPro && !isDeveloper && setShowPaywallModal(true)} 
-            className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${isPro || isDeveloper ? theme.primary + ' border-transparent' : 'bg-transparent ' + theme.border + ' ' + theme.muted}`}
+            onClick={() => setShowPaywallModal(true)} 
+            className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${isDeveloper ? 'bg-purple-600 text-white border-transparent' : isPro ? 'bg-green-500 text-black border-transparent' : isTrialActive ? 'bg-blue-600 text-white border-transparent' : 'bg-red-600 text-white border-transparent'}`}
           >
-            {isDeveloper ? 'DEV ♾️' : isPro ? 'VIP ♾️' : `${dailyCredits} TKN`}
+            {isDeveloper ? 'DEV VIP' : isPro ? 'VIP PRO' : isTrialActive ? `PRO (${trialDaysLeft}d gratis)` : 'SUSCRIBIRSE'}
           </button>
         </div>
       </header>
@@ -1782,7 +1781,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE AJUSTES Y EDICIÓN DE PERFIL COMPLETO */}
+      {/* MODAL DE AJUSTES Y CONFIGURACIÓN */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -1791,25 +1790,28 @@ export default function App() {
               <button onClick={() => setShowSettingsModal(false)} className={`${theme.muted} font-bold text-xl hover:text-white transition-colors`}>✕</button>
             </div>
 
-            {/* SECCIÓN SUSCRIPCIÓN EN EL MENÚ */}
+            {/* SECCIÓN SUSCRIPCIÓN EN EL MENÚ DE AJUSTES */}
             <div className={`p-5 rounded-3xl border border-blue-500/30 bg-blue-500/10 space-y-3`}>
               <div className="flex justify-between items-center">
                 <span className="text-xs font-black text-blue-400 uppercase tracking-widest">Plan Actual</span>
-                <span className={`text-[10px] px-3 py-1 rounded-full font-bold uppercase ${isPro || isDeveloper ? 'bg-green-500 text-black' : 'bg-white/20 text-white'}`}>
-                  {isDeveloper ? 'DEV VIP' : isPro ? 'PRO VIP' : 'GRATUITO'}
+                <span className={`text-[10px] px-3 py-1 rounded-full font-bold uppercase ${isDeveloper ? 'bg-purple-500 text-white' : isPro ? 'bg-green-500 text-black' : isTrialActive ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>
+                  {isDeveloper ? 'DEV VIP' : isPro ? 'PRO VIP' : isTrialActive ? `PRO (${trialDaysLeft}d prueba)` : 'EXPIRADO'}
                 </span>
               </div>
               <p className="text-[11px] text-gray-300 leading-relaxed">
-                {isPro || isDeveloper ? 'Tienes acceso ilimitado a todas las herramientas avanzadas de IA.' : `Te quedan ${dailyCredits} tokens hoy. Suscríbete para acceso ilimitado.`}
+                {isPro || isDeveloper 
+                  ? 'Tienes acceso ilimitado a todas las herramientas avanzadas de IA.' 
+                  : isTrialActive 
+                  ? `Estás en tu periodo de prueba ilimitado. Te quedan ${trialDaysLeft} días.` 
+                  : 'Tu periodo de prueba de 7 días ha finalizado. Suscríbete para continuar.'}
               </p>
               {(!isPro && !isDeveloper) && (
                 <button onClick={() => { setShowSettingsModal(false); setShowPaywallModal(true); }} className={`w-full py-3 bg-white text-black font-black text-[10px] uppercase tracking-widest rounded-full hover:scale-105 transition-transform`}>
-                  ⭐ Obtener STUDIO PRO
+                  ⭐ {isTrialActive ? 'Activar Suscripción STUDIO PRO' : 'Renovar STUDIO PRO'}
                 </button>
               )}
             </div>
 
-            {/* FORMULARIO PARA MODIFICAR PARÁMETROS DEL USUARIO */}
             <form onSubmit={handleSaveProfileSettings} className="space-y-4">
               <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block`}>Editar Objetivos y Datos</span>
 
@@ -1882,6 +1884,7 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL DE SUSCRIPCIÓN (PAYWALL TRAS EXPIRAR LOS 7 DÍAS) */}
       {showPaywallModal && !isPro && !isDeveloper && (
         <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-6 animate-fadeIn backdrop-blur-xl">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-8 shadow-2xl relative overflow-hidden`}>
@@ -1891,19 +1894,24 @@ export default function App() {
             <div className={`flex justify-between items-start pb-2 relative z-10`}>
               <div>
                 <span className={`text-[10px] ${theme.primary} px-3 py-1 rounded-full font-bold tracking-widest block uppercase mb-3 inline-block`}>STUDIO PRO</span>
-                <h3 className="text-3xl font-black leading-tight">Desbloquea<br/>tu potencial.</h3>
+                <h3 className="text-3xl font-black leading-tight">
+                  {isTrialActive ? 'Disfruta de tu\nPrueba Gratis.' : 'Tu prueba de\n7 días ha finalizado.'}
+                </h3>
               </div>
               <button onClick={() => setShowPaywallModal(false)} className={`${theme.muted} font-bold text-2xl transition-colors`}>✕</button>
             </div>
             
             <p className={`text-sm ${theme.muted} font-medium leading-relaxed relative z-10`}>
-              Has agotado tus tokens gratuitos de hoy. Únete a PRO para uso ilimitado de IA y analíticas.
+              {isTrialActive 
+                ? `Estás disfrutando de tus 7 días gratis. ¡Suscríbete ahora para asegurar tu precio promocional!`
+                : 'Pásate a STUDIO PRO para seguir contando macros con cámara y voz, generar recetas exclusivas y crear rutinas adaptadas a ti.'}
             </p>
             
             <div className={`space-y-4 relative z-10`}>
-              <div className="flex items-center gap-3 text-sm font-medium"><span className="text-blue-500 text-lg">✓</span> Rutinas IA ilimitadas y adaptadas a tu material</div>
-              <div className="flex items-center gap-3 text-sm font-medium"><span className="text-blue-500 text-lg">✓</span> Recetas del Chef IA ilimitadas</div>
-              <div className="flex items-center gap-3 text-sm font-medium"><span className="text-blue-500 text-lg">✓</span> Análisis clínico avanzado de progreso</div>
+              <div className="flex items-center gap-3 text-sm font-medium"><span className="text-blue-500 text-lg">✓</span> Escaneo de comidas por Foto y Voz con IA</div>
+              <div className="flex items-center gap-3 text-sm font-medium"><span className="text-blue-500 text-lg">✓</span> Rutinas ilimitadas adaptadas a tu equipamiento</div>
+              <div className="flex items-center gap-3 text-sm font-medium"><span className="text-blue-500 text-lg">✓</span> Recetas del Chef IA personalizadas</div>
+              <div className="flex items-center gap-3 text-sm font-medium"><span className="text-blue-500 text-lg">✓</span> Análisis clínicos y comparador de capas</div>
             </div>
 
             <div className="relative z-10 space-y-3">
@@ -1911,11 +1919,11 @@ export default function App() {
                 <span className="text-4xl font-black">9.99€</span>
                 <span className={`text-xs ${theme.muted} font-bold uppercase tracking-widest pb-1`}>/ mes</span>
               </div>
-              <button onClick={() => { setIsPro(true); localStorage.setItem(`${userKey}_is_pro`, 'true'); setShowPaywallModal(false); alert('¡Pago simulado con éxito! Ahora eres usuario VIP.'); }} className={`w-full py-5 ${theme.primary} font-black uppercase tracking-widest rounded-[2rem] text-xs shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:scale-105 transition-transform`}>
-                Suscribirse Ahora
+              <button onClick={() => { setIsPro(true); localStorage.setItem(`${userKey}_is_pro`, 'true'); setShowPaywallModal(false); alert('¡Pago simulado con éxito! Ahora tienes acceso STUDIO PRO activo.'); }} className={`w-full py-5 ${theme.primary} font-black uppercase tracking-widest rounded-[2rem] text-xs shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:scale-105 transition-transform`}>
+                Activar Suscripción
               </button>
               <button onClick={() => setShowPaywallModal(false)} className={`w-full py-4 bg-transparent ${theme.muted} font-bold uppercase tracking-widest rounded-full text-[10px]`}>
-                Quizás más tarde
+                {isTrialActive ? 'Continuar con mi prueba gratis' : 'Cerrar'}
               </button>
             </div>
           </div>
