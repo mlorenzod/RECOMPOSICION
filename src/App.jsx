@@ -20,6 +20,19 @@ const selectRecipeImage = (title = '', ingredients = []) => {
   return RECIPE_IMAGES_DB.default[Math.floor(Math.random() * RECIPE_IMAGES_DB.default.length)];
 };
 
+// LISTA DETALLADA DE EQUIPAMIENTO
+const AVAILABLE_EQUIPMENT_OPTIONS = [
+  { id: 'mancuernas', label: 'Mancuernas', icon: '🏋️' },
+  { id: 'barra', label: 'Barra y Discos', icon: '🏋️‍♂️' },
+  { id: 'banco', label: 'Banco Ajustable', icon: '🪜' },
+  { id: 'kettlebell', label: 'Kettlebell / Pesa Rusa', icon: '🔔' },
+  { id: 'polea', label: 'Polea / Cables', icon: '🪢' },
+  { id: 'dominadas', label: 'Barra de Dominadas', icon: '🪵' },
+  { id: 'fondos', label: 'Paralelas / Fondos', icon: '🪜' },
+  { id: 'cuerda', label: 'Cuerda / Pliometría', icon: '🪢' },
+  { id: 'calistenia', label: 'Peso Corporal', icon: '🤸' }
+];
+
 // ========== LISTA DE EJERCICIOS COMPUESTOS ==========
 const COMPOUND_EXERCISES = {
   squat: { name: 'Sentadilla', target: 'Pierna', img: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=600&q=80' },
@@ -107,6 +120,11 @@ const WorkoutPlannerModal = ({ isOpen, onClose, onPlanGenerated, currentPlan }) 
         <div className="flex justify-between items-center border-b border-white/10 pb-4">
           <h3 className="text-xl font-black text-white">Planificador de Entrenamiento</h3>
           <button onClick={onClose} className="text-gray-500 font-bold text-xl hover:text-white transition-colors">✕</button>
+        </div>
+
+        {/* AVISO MÉDICO LEGAL */}
+        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-[10px] text-amber-400 font-medium leading-relaxed">
+          ⚠️ <strong>Aviso de Salud:</strong> Consulta a un profesional médico antes de iniciar cualquier plan de entrenamiento físico.
         </div>
 
         {step === 1 && (
@@ -395,6 +413,9 @@ export default function App() {
   const [newIngredientQty, setNewIngredientQty] = useState('100');
   const [isCalculatingNewIngredient, setIsCalculatingNewIngredient] = useState(false);
 
+  // ESTADO REEMPLAZAR EJERCICIO CON IA
+  const [replacingExerciseId, setReplacingExerciseId] = useState(null);
+
   const targetMacros = calculateScienceMacros(userProfile);
   const currentMacros = dailyNutritionLogs[selectedDay] || { cal: 0, protein: 0, carbs: 0, fat: 0 };
   const calPercentage = Math.min(100, Math.round((currentMacros.cal / targetMacros.cal) * 100));
@@ -494,7 +515,76 @@ export default function App() {
     localStorage.setItem('active_user_profile', JSON.stringify(editProfile));
     setUserProfile(editProfile);
     setShowSettingsModal(false);
-    alert('¡Perfil y objetivo actualizados correctamente!');
+    alert('¡Perfil y equipamiento actualizados!');
+  };
+
+  const handleEquipmentToggle = (equipId) => {
+    const currentEquip = editProfile?.equipamientoArray || ['gimnasio'];
+    const exists = currentEquip.includes(equipId);
+    let updated = [];
+    if (exists) {
+      updated = currentEquip.filter(item => item !== equipId);
+    } else {
+      updated = [...currentEquip, equipId];
+    }
+    setEditProfile({ ...editProfile, equipamientoArray: updated });
+  };
+
+  // REEMPLAZAR UN EJERCICIO POR OTRO CON IA
+  const replaceExerciseWithAI = async (exercise) => {
+    if (!verifyAccessOrShowPaywall()) return;
+    setReplacingExerciseId(exercise.id);
+
+    try {
+      const equipText = (userProfile?.equipamientoArray || ['mancuernas', 'barra']).join(', ');
+      const promptText = `Reemplaza el ejercicio "${exercise.name}" (Objetivo muscular: ${exercise.target}) por otro ejercicio equivalente e ideal para el mismo grupo muscular.
+      El usuario solo dispone de este equipamiento: ${equipText}.
+      Devuelve ÚNICAMENTE un JSON estricto:
+      {"name": "Nombre del Ejercicio", "target": "${exercise.target}", "sets": "${exercise.sets}", "reps": "${exercise.reps}"}`;
+
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-3.5-flash-lite',
+          parts: [{ text: promptText }],
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Error al reemplazar ejercicio');
+
+      const rawText = data.text || (data.candidates && data.candidates[0]?.content?.parts[0]?.text) || '';
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Respuesta de IA no válida');
+
+      const newExData = JSON.parse(jsonMatch[0]);
+
+      // Actualizar el plan de entrenamiento
+      const dayOfWeek = ((selectedDay - 1) % 7) + 1;
+      const updatedPlan = { ...workoutPlan };
+      if (updatedPlan.sessions[dayOfWeek]) {
+        updatedPlan.sessions[dayOfWeek].exercises = updatedPlan.sessions[dayOfWeek].exercises.map(ex => {
+          if (ex.id === exercise.id) {
+            return {
+              ...ex,
+              name: newExData.name || ex.name,
+              sets: newExData.sets || ex.sets,
+              reps: newExData.reps || ex.reps
+            };
+          }
+          return ex;
+        });
+        setWorkoutPlan(updatedPlan);
+        localStorage.setItem(`${userKey}_workout_plan`, JSON.stringify(updatedPlan));
+      }
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo reemplazar el ejercicio. Inténtalo nuevamente.");
+    } finally {
+      setReplacingExerciseId(null);
+    }
   };
 
   // ================================================================
@@ -504,8 +594,9 @@ export default function App() {
   const generateInitialRoutine = async (profileData) => {
     setAuthStep('generating_routine');
     try {
+      const equipText = (profileData.equipamientoArray || ['gimnasio']).join(', ');
       const prompt = `Actúa como un Head Coach especialista en hipertrofia basada en evidencia. 
-      Diseña una rutina Torso/Pierna (Upper/Lower) de 3 ejercicios por día para un usuario cuyo objetivo es: ${profileData.objetivo || 'Recomposición'} y dispone de equipamiento: ${profileData.equipamiento || 'gimnasio'}.
+      Diseña una rutina Torso/Pierna (Upper/Lower) de 3 ejercicios por día para un usuario cuyo objetivo es: ${profileData.objetivo || 'Recomposición'} y dispone ÚNICAMENTE de este equipamiento: ${equipText}.
       Devuelve SOLO un JSON estricto con esta estructura exacta:
       {
         "torso": [
@@ -606,7 +697,6 @@ export default function App() {
     }
   };
 
-  // NUTRITION AI INGREDIENT CALCULATOR (CORREGIDO PARA INTERFAZ VERCEL)
   const calculateCustomIngredientWithGemini = async () => {
     if (!newIngredientName.trim()) return alert("Ingresa el nombre del alimento.");
     if (!verifyAccessOrShowPaywall()) return;
@@ -740,9 +830,6 @@ export default function App() {
     }
   };
 
-  // ================================================================
-  // BARRAS SELECTORAS DINÁMICAS (UNIDADES O GRAMOS CON RECÁLCULO A TIEMPO REAL)
-  // ================================================================
   const handleFoodQuantityChange = (index, newQuantity) => {
     if (!scanResult) return;
     const updatedFoods = [...scanResult.foods];
@@ -1071,6 +1158,11 @@ export default function App() {
   const scanTotalCal = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.cal || 0), 0) : 0;
   const scanTotalProt = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.prot || 0), 0) : 0;
 
+  // CÁLCULO DE MACROS RESTANTES Y COLORES
+  const protDiff = targetMacros.protein - currentMacros.protein;
+  const carbsDiff = targetMacros.carbs - currentMacros.carbs;
+  const fatDiff = targetMacros.fat - currentMacros.fat;
+
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
       <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleMultipleFileUpload} />
@@ -1183,6 +1275,8 @@ export default function App() {
             ) : currentExercises.length > 0 ? (
               currentExercises.map((ex) => {
                 const logsToday = logs[`day_${selectedDay}_${ex.id}`] || [];
+                const isReplacing = replacingExerciseId === ex.id;
+
                 return (
                   <div key={ex.id} className={`${theme.card} border ${theme.border} rounded-[2rem] overflow-hidden space-y-5 pb-6 transition-colors duration-500 ${theme.shadow}`}>
                     <div className="relative h-56 w-full group">
@@ -1223,7 +1317,14 @@ export default function App() {
                         <button onClick={() => handleLogSet(ex.id, 20, 5)} className={`flex-1 py-4 ${theme.primary} font-black rounded-full text-[10px] uppercase tracking-widest`}>
                           Añadir Set
                         </button>
-                        <button onClick={() => alert('Función de sustitución próximamente')} className={`px-6 py-4 ${theme.secondary} border ${theme.border} rounded-full text-xs`}>🔄</button>
+                        {/* BOTÓN CAMBIAR EJERCICIO POR GUSTO CON IA */}
+                        <button 
+                          onClick={() => replaceExerciseWithAI(ex)} 
+                          disabled={isReplacing}
+                          className={`px-5 py-4 ${theme.secondary} border ${theme.border} rounded-full text-xs font-bold uppercase tracking-widest hover:scale-105 transition-transform flex items-center gap-1.5`}
+                        >
+                          {isReplacing ? '...' : '🔄 Cambiar'}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1238,7 +1339,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ======================= MÓDULO NUTRICIÓN ======================= */}
+        {/* ======================= MÓDULO NUTRICIÓN (REDISEÑADO CON MACROS Y COLORES) ======================= */}
         {activeTab === 'nutricion' && (
           <div className="space-y-8 animate-fadeIn">
             
@@ -1253,11 +1354,11 @@ export default function App() {
                 )}
               </div>
 
-              <div className="flex items-center gap-8">
+              <div className="flex items-center gap-6">
                 <div className="relative w-32 h-32 flex items-center justify-center flex-shrink-0">
                   <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                    <path className={isDark ? "text-[#222]" : "text-gray-200"} strokeWidth="2" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                    <path className={`${isDark ? "text-white" : "text-black"} transition-all duration-1000`} strokeDasharray={`${calPercentage}, 100`} strokeWidth="2" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <path className={isDark ? "text-[#222]" : "text-gray-200"} strokeWidth="2.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <path className={`${isDark ? "text-white" : "text-black"} transition-all duration-1000`} strokeDasharray={`${calPercentage}, 100`} strokeWidth="2.5" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                   </svg>
                   <div className="absolute text-center flex flex-col items-center">
                     <span className="text-3xl font-black leading-none">{currentMacros.cal}</span>
@@ -1265,19 +1366,51 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className={`space-y-4 flex-1 text-[10px] font-bold uppercase tracking-wider`}>
-                  <div>
-                    <div className="flex justify-between mb-2"><span className={theme.muted}>Prot</span><span>{currentMacros.protein}g</span></div>
-                    <div className={`h-1 ${isDark ? 'bg-[#222]' : 'bg-gray-200'} rounded-full overflow-hidden`}><div className={`h-full ${isDark ? 'bg-white' : 'bg-black'} transition-all`} style={{ width: `${(currentMacros.protein / targetMacros.protein) * 100}%` }}></div></div>
+                {/* DESGLOSE DETALLADO DE CADA MACRO CON COLORES Y GRAMOS RESTANTES */}
+                <div className="space-y-4 flex-1 text-[10px] font-bold">
+                  
+                  {/* PROTEÍNAS (ESMERALDA) */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-emerald-500 font-extrabold uppercase">🥩 Prot</span>
+                      <span className={theme.text}>{currentMacros.protein}g <span className={theme.muted}>/ {targetMacros.protein}g</span></span>
+                    </div>
+                    <div className={`h-2 ${isDark ? 'bg-gray-900' : 'bg-gray-200'} rounded-full overflow-hidden`}>
+                      <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.protein / targetMacros.protein) * 100)}%` }}></div>
+                    </div>
+                    <div className="text-[8px] text-right font-semibold">
+                      {protDiff > 0 ? <span className="text-emerald-500">Quedan {protDiff}g</span> : <span className="text-gray-400">Meta cumplida</span>}
+                    </div>
                   </div>
-                  <div>
-                    <div className="flex justify-between mb-2"><span className={theme.muted}>Carbs</span><span>{currentMacros.carbs}g</span></div>
-                    <div className={`h-1 ${isDark ? 'bg-[#222]' : 'bg-gray-200'} rounded-full overflow-hidden`}><div className={`h-full ${isDark ? 'bg-white' : 'bg-black'} transition-all`} style={{ width: `${(currentMacros.carbs / targetMacros.carbs) * 100}%` }}></div></div>
+
+                  {/* CARBOHIDRATOS (AZUL) */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-blue-500 font-extrabold uppercase">🍞 Carbs</span>
+                      <span className={theme.text}>{currentMacros.carbs}g <span className={theme.muted}>/ {targetMacros.carbs}g</span></span>
+                    </div>
+                    <div className={`h-2 ${isDark ? 'bg-gray-900' : 'bg-gray-200'} rounded-full overflow-hidden`}>
+                      <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.carbs / targetMacros.carbs) * 100)}%` }}></div>
+                    </div>
+                    <div className="text-[8px] text-right font-semibold">
+                      {carbsDiff > 0 ? <span className="text-blue-500">Quedan {carbsDiff}g</span> : <span className="text-gray-400">Meta cumplida</span>}
+                    </div>
                   </div>
-                  <div>
-                    <div className="flex justify-between mb-2"><span className={theme.muted}>Fats</span><span>{currentMacros.fat}g</span></div>
-                    <div className={`h-1 ${isDark ? 'bg-[#222]' : 'bg-gray-200'} rounded-full overflow-hidden`}><div className={`h-full ${isDark ? 'bg-white' : 'bg-black'} transition-all`} style={{ width: `${(currentMacros.fat / targetMacros.fat) * 100}%` }}></div></div>
+
+                  {/* GRASAS (ÁMBAR/NARANJA) */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-amber-500 font-extrabold uppercase">🥑 Fats</span>
+                      <span className={theme.text}>{currentMacros.fat}g <span className={theme.muted}>/ {targetMacros.fat}g</span></span>
+                    </div>
+                    <div className={`h-2 ${isDark ? 'bg-gray-900' : 'bg-gray-200'} rounded-full overflow-hidden`}>
+                      <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.fat / targetMacros.fat) * 100)}%` }}></div>
+                    </div>
+                    <div className="text-[8px] text-right font-semibold">
+                      {fatDiff > 0 ? <span className="text-amber-500">Quedan {fatDiff}g</span> : <span className="text-gray-400">Meta cumplida</span>}
+                    </div>
                   </div>
+
                 </div>
               </div>
             </div>
@@ -1300,12 +1433,12 @@ export default function App() {
               </form>
             </div>
 
-            {/* TARJETA DE CONFIRMACIÓN CON DISEÑO LIMPIO Y BARRAS SLIDER HIGH-CONTRAST */}
+            {/* TARJETA DE CONFIRMACIÓN CON BARRAS HIGH-CONTRAST */}
             {scanResult && (
               <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-6 space-y-6 animate-fadeIn ${theme.shadow} relative overflow-hidden`}>
                 <div className={`flex items-start justify-between border-b ${theme.border} pb-4`}>
                   <div className="flex-1 pr-4">
-                    <span className={`text-[10px] font-bold ${isDark ? 'text-green-400' : 'text-emerald-700'} uppercase tracking-widest block mb-1`}>✦ Detección completada</span>
+                    <span className={`text-[10px] font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-700'} uppercase tracking-widest block mb-1`}>✦ Detección completada</span>
                     <input 
                       type="text" 
                       value={scanResult.dishName} 
@@ -1372,7 +1505,7 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* FORMULARIO PARA AGREGAR NUEVO INGREDIENTE Y RECONECTAR CON LA IA (CORREGIDO Y OPERATIVO) */}
+                  {/* FORMULARIO PARA AGREGAR NUEVO INGREDIENTE Y RECONECTAR CON LA IA */}
                   {showCustomIngredientForm && (
                     <div className={`p-4 ${theme.secondary} rounded-2xl border border-blue-500/30 space-y-3 animate-fadeIn`}>
                       <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block">🤖 Consultar Ingrediente a la IA</span>
@@ -1484,12 +1617,12 @@ export default function App() {
                           />
                         </div>
 
-                        {/* VALORES DE MACROS A TIEMPO REAL */}
-                        <div className={`font-semibold ${theme.text} uppercase tracking-wider text-[9px] flex justify-between pt-2 border-t ${theme.border}`}>
-                          <span>🔥 {f.cal} kcal</span>
-                          <span>🥩 {f.prot}g P</span>
-                          <span>🍞 {f.carbs}g C</span>
-                          <span>🥑 {f.fat}g F</span>
+                        {/* VALORES DE MACROS A TIEMPO REAL CON COLORES */}
+                        <div className={`font-semibold uppercase tracking-wider text-[9px] flex justify-between pt-2 border-t ${theme.border}`}>
+                          <span className={theme.text}>🔥 {f.cal} kcal</span>
+                          <span className="text-emerald-500 font-bold">🥩 {f.prot}g P</span>
+                          <span className="text-blue-500 font-bold">🍞 {f.carbs}g C</span>
+                          <span className="text-amber-500 font-bold">🥑 {f.fat}g F</span>
                         </div>
                       </div>
                     );
@@ -1538,15 +1671,15 @@ export default function App() {
                     <div className={`grid grid-cols-3 gap-2 text-center p-3 ${theme.card} rounded-2xl border ${theme.border}`}>
                       <div>
                         <span className={`text-[9px] ${theme.muted} font-bold uppercase block`}>Proteína</span>
-                        <span className="text-sm font-black text-green-500">{personalizedRecipe.prot}g</span>
+                        <span className="text-sm font-black text-emerald-500">{personalizedRecipe.prot}g</span>
                       </div>
                       <div>
                         <span className={`text-[9px] ${theme.muted} font-bold uppercase block`}>Carbs</span>
-                        <span className="text-sm font-black">{personalizedRecipe.carbs}g</span>
+                        <span className="text-sm font-black text-blue-500">{personalizedRecipe.carbs}g</span>
                       </div>
                       <div>
                         <span className={`text-[9px] ${theme.muted} font-bold uppercase block`}>Grasas</span>
-                        <span className="text-sm font-black">{personalizedRecipe.fat}g</span>
+                        <span className="text-sm font-black text-amber-500">{personalizedRecipe.fat}g</span>
                       </div>
                     </div>
                     
@@ -2017,7 +2150,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE AJUSTES Y CONFIGURACIÓN */}
+      {/* MODAL DE AJUSTES Y CONFIGURACIÓN (SELECTOR MÚLTIPLE DE MATERIAL DETALLADO) */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -2095,17 +2228,29 @@ export default function App() {
                 </select>
               </div>
 
+              {/* SELECTOR GRANULAR Y MÚLTIPLE DE EQUIPAMIENTO */}
               <div>
-                <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-1`}>Equipamiento Disponible</label>
-                <select 
-                  value={editProfile?.equipamiento || 'gimnasio'} 
-                  onChange={(e) => setEditProfile({ ...editProfile, equipamiento: e.target.value })}
-                  className={`w-full bg-transparent border-b ${theme.border} py-2 text-xs font-bold outline-none`}
-                >
-                  <option value="gimnasio" className={isDark ? "bg-black" : "bg-white"}>🏋️ Gimnasio Completo</option>
-                  <option value="mancuernas" className={isDark ? "bg-black" : "bg-white"}>🏠 Mancuernas y Banco en casa</option>
-                  <option value="calistenia" className={isDark ? "bg-black" : "bg-white"}>🤸 Calistenia / Peso Corporal</option>
-                </select>
+                <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-2`}>Equipamiento Disponible (Selecciona el tuyo)</label>
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                  {AVAILABLE_EQUIPMENT_OPTIONS.map((equip) => {
+                    const selected = (editProfile?.equipamientoArray || ['gimnasio']).includes(equip.id);
+                    return (
+                      <button
+                        key={equip.id}
+                        type="button"
+                        onClick={() => handleEquipmentToggle(equip.id)}
+                        className={`p-2.5 rounded-2xl border text-[10px] font-bold flex items-center gap-2 transition-all ${
+                          selected 
+                            ? isDark ? 'bg-white text-black border-white' : 'bg-black text-white border-black' 
+                            : `${theme.secondary} ${theme.border} ${theme.muted}`
+                        }`}
+                      >
+                        <span>{equip.icon}</span>
+                        <span className="truncate">{equip.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <button type="submit" className={`w-full py-3.5 ${theme.primary} text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg mt-2`}>
