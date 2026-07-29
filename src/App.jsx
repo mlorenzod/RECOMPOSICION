@@ -20,7 +20,7 @@ const selectRecipeImage = (title = '', ingredients = []) => {
   return RECIPE_IMAGES_DB.default[Math.floor(Math.random() * RECIPE_IMAGES_DB.default.length)];
 };
 
-// ========== NUEVA LISTA DE EJERCICIOS COMPUESTOS ==========
+// ========== LISTA DE EJERCICIOS COMPUESTOS ==========
 const COMPOUND_EXERCISES = {
   squat: { name: 'Sentadilla', target: 'Pierna', img: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=600&q=80' },
   bench: { name: 'Press Banca', target: 'Pecho', img: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=80' },
@@ -189,19 +189,6 @@ const WorkoutPlannerModal = ({ isOpen, onClose, onPlanGenerated, currentPlan }) 
   );
 };
 
-// ========== RUTINAS BASE (FALLBACK) ==========
-const BASE_WORKOUTS = {
-  torso: [
-    { id: 'bench', name: 'Press Inclinado', target: 'Pectoral / Tríceps', defaultPR: 12, sets: '4 x 8-10', img: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=80', alts: ['Press Plano', 'Flexiones'] },
-    { id: 'row', name: 'Remo Gironda', target: 'Espalda / Dorsal', defaultPR: 30, sets: '4 x 10', img: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&q=80', alts: ['Remo Mancuerna', 'Jalón al Pecho'] },
-    { id: 'press', name: 'Elevaciones Laterales', target: 'Hombros', defaultPR: 6, sets: '4 x 12-15', img: 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=600&q=80', alts: ['Press Militar', 'Pájaros'] }
-  ],
-  pierna: [
-    { id: 'squat', name: 'Sentadilla Búlgara', target: 'Cuádriceps / Glúteo', defaultPR: 10, sets: '4 x 8-10', img: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=600&q=80', alts: ['Prensa', 'Zancadas'] },
-    { id: 'dl', name: 'Hip Thrust', target: 'Isquios / Glúteo', defaultPR: 50, sets: '4 x 10-12', img: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&q=80', alts: ['Peso Muerto Rumano', 'Kickback'] }
-  ]
-};
-
 const EXERCISE_ANALYTICS = {
   bench: { name: 'Press Inclinado', history: [10, 10, 12, 12, 14, 15], unit: 'kg', gain: '+5 kg' },
   squat: { name: 'Sentadilla Búlgara', history: [5, 7.5, 7.5, 10, 10, 12.5], unit: 'kg', gain: '+7.5 kg' },
@@ -268,7 +255,6 @@ const calculateScienceMacros = (profile) => {
 // ========== COMPONENTE PRINCIPAL APP ==========
 // ============================================================
 export default function App() {
-  // 1. Carga de Tipografía Editorial
   useEffect(() => {
     const fontLink = document.createElement('link');
     fontLink.href = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700;900&display=swap';
@@ -276,7 +262,6 @@ export default function App() {
     document.head.appendChild(fontLink);
   }, []);
 
-  // 2. Sistema de Tema
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('app_theme_dark');
     return saved !== null ? saved === 'true' : true;
@@ -334,13 +319,11 @@ export default function App() {
   const [isPro, setIsPro] = useState(() => isDeveloper || localStorage.getItem(`${userKey}_is_pro`) === 'true');
   const [showPaywallModal, setShowPaywallModal] = useState(false);
 
-  // === ESTADO DE RUTINA (Dinámica) - Manejado por workoutPlan ===
   const [workouts, setWorkouts] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_workouts`);
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Plan de entrenamiento personalizado
   const [workoutPlan, setWorkoutPlan] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_workout_plan`);
     if (saved) {
@@ -433,7 +416,7 @@ export default function App() {
 
   const fileInputRef = useRef(null);
   const mealFileInputRef = useRef(null);
-  const mealCameraInputRef = useRef(null); // Ref para cámara en vivo de nutrición
+  const mealCameraInputRef = useRef(null); 
   const videoRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState('entreno');
@@ -516,7 +499,7 @@ export default function App() {
     setIsScanning(true);
     try {
       const systemInstruction = `Analiza la siguiente comida. Devuelve SOLO un JSON estricto sin bloques markdown. Formato:
-      {"dishName": "Nombre", "foods": [{"name": "Ingrediente", "grams": 150, "cal": 220, "prot": 25, "carbs": 20, "fat": 8}], "goalFeedback": "Feedback en 10 palabras."}`;
+      {"dishName": "Nombre del plato o alimento", "foods": [{"name": "Ingrediente o elemento", "grams": 150, "cal": 220, "prot": 25, "carbs": 20, "fat": 8}], "goalFeedback": "Un comentario breve, positivo y motivador sobre la comida (máximo 12 palabras)."}`;
 
       let parts = [];
       if (typeof promptContent === 'string') {
@@ -548,20 +531,19 @@ export default function App() {
       const scanData = JSON.parse(jsonMatch[0]);
       setScanResult({
         dishName: scanData.dishName,
-        img: (typeof promptContent === 'object' && promptContent.inlineData) ? `data:${promptContent.inlineData.mimeType};base64,${promptContent.inlineData.data}` : null,
+        img: (typeof promptContent === 'object' && promptContent.inlineData && promptContent.inlineData.mimeType.startsWith('image/')) ? `data:${promptContent.inlineData.mimeType};base64,${promptContent.inlineData.data}` : null,
         foods: scanData.foods,
         goalFeedback: scanData.goalFeedback
       });
       setUserXP(prev => prev + 50);
     } catch (error) {
       console.error("Error procesando la comida:", error);
-      alert("No se pudo procesar la lectura. Por favor, intenta de nuevo.");
+      alert("¡Vaya! No se pudo identificar correctamente la entrada. Inténtalo de nuevo.");
     } finally {
       setIsScanning(false);
     }
   };
 
-  // Manejo de carga de imagen desde galería o cámara
   const handleMealImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -621,7 +603,7 @@ export default function App() {
         setIsRecordingAudio(true);
       } catch (err) { 
         console.error("Error al acceder al micrófono:", err);
-        alert("No se pudo acceder al micrófono. Verifica los permisos de tu navegador."); 
+        alert("No se pudo acceder al micrófono. Por favor comprueba los permisos del navegador."); 
       }
     }
   };
@@ -898,7 +880,7 @@ export default function App() {
 
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
-      {/* Inputs Ocultos de Selección de Archivos */}
+      {/* Inputs Ocultos de Selección de Archivos / Cámara */}
       <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleMultipleFileUpload} />
       <input type="file" ref={mealFileInputRef} accept="image/*" className="hidden" onChange={handleMealImageUpload} />
       <input type="file" ref={mealCameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleMealImageUpload} />
@@ -1113,38 +1095,66 @@ export default function App() {
               <span className={`text-[10px] ${theme.muted} font-bold block uppercase tracking-widest`}>Registro Inteligente</span>
               <form onSubmit={handleTextFoodSubmit} className="space-y-4">
                 <div className="relative">
-                  <input type="text" placeholder="Ej. Bowl de salmón y arroz..." value={textFoodInput} onChange={(e) => setTextFoodInput(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-3 pr-24 text-sm outline-none transition-colors font-medium`} />
-                  <div className="absolute right-0 top-2 flex gap-2">
-                    <button type="button" onClick={handleToggleAudioRecording} title="Grabar audio" className={`p-1.5 rounded-full transition-colors ${isRecordingAudio ? 'text-red-500 animate-pulse' : theme.muted}`}>🎙️</button>
-                    <button type="button" onClick={() => mealCameraInputRef.current.click()} title="Tomar foto con cámara" className={`p-1.5 ${theme.muted} hover:text-white transition-colors`}>📷</button>
-                    <button type="button" onClick={() => mealFileInputRef.current.click()} title="Abrir Galería" className={`p-1.5 ${theme.muted} hover:text-white transition-colors`}>🖼️</button>
+                  <input type="text" placeholder="Ej. Bowl de salmón y arroz..." value={textFoodInput} onChange={(e) => setTextFoodInput(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-3 pr-28 text-sm outline-none transition-colors font-medium`} />
+                  <div className="absolute right-0 top-2 flex items-center gap-1.5">
+                    <button type="button" onClick={handleToggleAudioRecording} title="Grabar nota de voz" className={`p-1.5 rounded-full transition-all ${isRecordingAudio ? 'text-red-500 scale-125 animate-pulse' : theme.muted}`}>🎙️</button>
+                    <button type="button" onClick={() => mealCameraInputRef.current.click()} title="Tomar foto con la cámara" className={`p-1.5 ${theme.muted} hover:text-white transition-colors`}>📷</button>
+                    <button type="button" onClick={() => mealFileInputRef.current.click()} title="Elegir foto de la galería" className={`p-1.5 ${theme.muted} hover:text-white transition-colors`}>🖼️</button>
                   </div>
                 </div>
                 <button type="submit" disabled={isScanning} className={`w-full py-4 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${!isScanning ? theme.primary : theme.secondary + ' opacity-50 cursor-not-allowed'}`}>
-                  {isScanning ? 'Analizando...' : 'Procesar Comida'}
+                  {isScanning ? 'Analizando con IA...' : 'Procesar Comida'}
                 </button>
               </form>
             </div>
 
+            {/* TARJETA DE CONFIRMACIÓN DE LECTURA DE IA (NUTRITIVA Y AMABLE) */}
             {scanResult && (
-              <div className={`${theme.secondary} border border-gray-400/30 rounded-[2.5rem] p-8 space-y-6 animate-fadeIn ${theme.shadow}`}>
-                <div className="space-y-4">
-                  <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block border-b ${theme.border} pb-3`}>
-                    Lectura: <span className={theme.text}>{scanResult.dishName}</span>
-                  </span>
+              <div className={`${theme.card} border border-green-500/30 rounded-[2.5rem] p-6 space-y-6 animate-fadeIn shadow-2xl relative overflow-hidden`}>
+                <div className="flex items-start justify-between border-b border-white/10 pb-4">
+                  <div>
+                    <span className="text-[9px] font-bold text-green-400 uppercase tracking-widest block mb-1">✅ Detección completada</span>
+                    <h3 className="text-xl font-black leading-tight">{scanResult.dishName}</h3>
+                  </div>
+                  <span className="text-2xl">🥗</span>
+                </div>
+
+                {scanResult.img && (
+                  <div className="relative w-full h-40 rounded-2xl overflow-hidden border border-white/10">
+                    <img src={scanResult.img} alt="Vista del plato" className="w-full h-full object-cover" />
+                  </div>
+                )}
+
+                {scanResult.goalFeedback && (
+                  <div className="p-3.5 bg-green-500/10 border border-green-500/20 rounded-2xl text-xs text-green-400 font-medium italic">
+                    "{scanResult.goalFeedback}"
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <span className={`text-[9px] ${theme.muted} font-bold uppercase tracking-widest block`}>Ingredientes e información nutricional</span>
                   {scanResult.foods.map((f, i) => (
-                    <div key={i} className={`flex justify-between items-center text-sm ${theme.card} p-4 rounded-2xl border ${theme.border}`}>
+                    <div key={i} className={`flex justify-between items-center text-xs ${theme.secondary} p-3.5 rounded-2xl border ${theme.border}`}>
                       <div>
-                        <span className="font-bold block mb-1">{f.name}</span>
-                        <span className={`text-[10px] ${theme.muted} font-medium tracking-wide uppercase`}>{f.cal} kcal | {f.prot}g prot</span>
+                        <span className="font-bold block text-sm">{f.name}</span>
+                        <span className={`text-[10px] ${theme.muted} font-semibold uppercase tracking-wider`}>
+                          🔥 {f.cal} kcal · 🥩 {f.prot}g prot · 🍞 {f.carbs}g carbs · 🥑 {f.fat}g fat
+                        </span>
                       </div>
-                      <div className={`font-bold ${theme.secondary} px-4 py-2 rounded-xl border ${theme.border}`}>{f.grams}g</div>
+                      <div className="font-bold text-xs bg-white/10 px-3 py-1.5 rounded-xl border border-white/10">
+                        {f.grams}g
+                      </div>
                     </div>
                   ))}
                 </div>
-                <div className="flex gap-3">
-                  <button onClick={handleConfirmScan} className={`flex-1 py-4 ${theme.primary} font-black rounded-full text-[10px] uppercase tracking-widest`}>Añadir</button>
-                  <button onClick={() => setScanResult(null)} className={`px-6 py-4 bg-transparent border ${theme.border} font-black rounded-full text-[10px] uppercase tracking-widest`}>Cancelar</button>
+
+                <div className="flex gap-3 pt-2">
+                  <button onClick={handleConfirmScan} className={`flex-1 py-4 ${theme.primary} font-black rounded-full text-[10px] uppercase tracking-widest shadow-lg hover:scale-[1.02] transition-transform`}>
+                    Añadir a mis Macros
+                  </button>
+                  <button onClick={() => setScanResult(null)} className={`px-5 py-4 bg-transparent border ${theme.border} text-gray-400 font-black rounded-full text-[10px] uppercase tracking-widest hover:text-white transition-colors`}>
+                    Descartar
+                  </button>
                 </div>
               </div>
             )}
