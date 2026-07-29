@@ -387,8 +387,13 @@ export default function App() {
   const [strategyReport, setStrategyReport] = useState(null);
   const [showStrategyModal, setShowStrategyModal] = useState(false);
 
-  // ESTADO PARA MOSTRAR O OCULTAR GRÁFICO DE DISTRIBUCIÓN POR INGREDIENTE
+  // ESTADOS DE NUTRICIÓN
   const [showMacroBreakdownChart, setShowMacroBreakdownChart] = useState(false);
+  const [showCustomIngredientForm, setShowCustomIngredientForm] = useState(false);
+  const [newIngredientName, setNewIngredientName] = useState('');
+  const [newIngredientUnit, setNewIngredientNameUnit] = useState('g');
+  const [newIngredientQty, setNewIngredientQty] = useState('100');
+  const [isCalculatingNewIngredient, setIsCalculatingNewIngredient] = useState(false);
 
   const targetMacros = calculateScienceMacros(userProfile);
   const currentMacros = dailyNutritionLogs[selectedDay] || { cal: 0, protein: 0, carbs: 0, fat: 0 };
@@ -601,6 +606,63 @@ export default function App() {
     }
   };
 
+  // NUEVA FUNCIÓN: CALCULAR UN INGREDIENTE MANUAL USANDO IA
+  const calculateCustomIngredientWithGemini = async () => {
+    if (!newIngredientName.trim()) return alert("Ingresa el nombre del alimento.");
+    if (!verifyAccessOrShowPaywall()) return;
+    
+    setIsCalculatingNewIngredient(true);
+    try {
+      const qtyNum = parseFloat(newIngredientQty) || 100;
+      const prompt = `Calcula de forma exacta la información nutricional para: "${qtyNum} ${newIngredientNameUnit === 'ud' ? 'unidades de' : 'gramos de'} ${newIngredientName}".
+      Devuelve SOLO un JSON estricto con esta estructura:
+      {"name": "${newIngredientName}", "unitType": "${newIngredientNameUnit}", "grams": ${qtyNum}, "unitWeight": ${newIngredientNameUnit === 'ud' ? 60 : 1}, "cal": 150, "prot": 10, "carbs": 15, "fat": 2}`;
+
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-3.5-flash-lite',
+          parts: [{ text: prompt }],
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Error al calcular ingrediente');
+
+      const rawText = data.text || (data.candidates && data.candidates[0]?.content?.parts[0]?.text) || '';
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Respuesta de IA no válida');
+
+      const calcData = JSON.parse(jsonMatch[0]);
+
+      const newItem = {
+        name: calcData.name || newIngredientName,
+        unitType: newIngredientNameUnit,
+        grams: qtyNum,
+        unitWeight: calcData.unitWeight || 1,
+        cal: calcData.cal || 0,
+        prot: calcData.prot || 0,
+        carbs: calcData.carbs || 0,
+        fat: calcData.fat || 0,
+        baseCalPerUnit: calcData.cal / qtyNum,
+        baseProtPerUnit: calcData.prot / qtyNum,
+        baseCarbsPerUnit: calcData.carbs / qtyNum,
+        baseFatPerUnit: calcData.fat / qtyNum,
+      };
+
+      setScanResult(prev => ({ ...prev, foods: [...prev.foods, newItem] }));
+      setNewIngredientName('');
+      setShowCustomIngredientForm(false);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo obtener la información nutricional. Inténtalo de nuevo.");
+    } finally {
+      setIsCalculatingNewIngredient(false);
+    }
+  };
+
   const handleMealImageUpload = async (e) => {
     if (!verifyAccessOrShowPaywall()) return;
     const file = e.target.files[0];
@@ -736,24 +798,6 @@ export default function App() {
     if (!scanResult) return;
     const updatedFoods = scanResult.foods.filter((_, i) => i !== index);
     setScanResult({ ...scanResult, foods: updatedFoods });
-  };
-
-  const handleAddFoodItem = () => {
-    if (!scanResult) return;
-    const newItem = { 
-      name: "Nuevo ingrediente", 
-      unitType: "g", 
-      grams: 100, 
-      cal: 120, 
-      prot: 10, 
-      carbs: 15, 
-      fat: 3,
-      baseCalPerUnit: 1.2,
-      baseProtPerUnit: 0.1,
-      baseCarbsPerUnit: 0.15,
-      baseFatPerUnit: 0.03
-    };
-    setScanResult({ ...scanResult, foods: [...scanResult.foods, newItem] });
   };
 
   const generatePersonalizedRecipe = async () => {
@@ -1315,10 +1359,67 @@ export default function App() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest`}>Ajustar Cantidades con Barra</span>
-                    <button onClick={handleAddFoodItem} className={`text-[10px] font-bold ${theme.text} hover:opacity-70 flex items-center gap-1 transition-opacity`}>
-                      <span>+</span> Añadir ingrediente
+                    <button 
+                      type="button"
+                      onClick={() => setShowCustomIngredientForm(!showCustomIngredientForm)} 
+                      className={`text-[10px] font-bold ${theme.text} hover:opacity-70 flex items-center gap-1 transition-opacity`}
+                    >
+                      <span>+</span> {showCustomIngredientForm ? 'Cancelar' : 'Añadir ingrediente'}
                     </button>
                   </div>
+
+                  {/* FORMULARIO PARA AGREGAR NUEVO INGREDIENTE Y RECONECTAR CON LA IA */}
+                  {showCustomIngredientForm && (
+                    <div className={`p-4 ${theme.secondary} rounded-2xl border border-blue-500/30 space-y-3 animate-fadeIn`}>
+                      <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block">🤖 Consultar Ingrediente a la IA</span>
+                      
+                      <div className="space-y-2">
+                        <input 
+                          type="text" 
+                          placeholder="Ej. Aceite de oliva, Pan integral..." 
+                          value={newIngredientName} 
+                          onChange={(e) => setNewIngredientName(e.target.value)}
+                          className={`w-full bg-transparent border-b ${theme.border} py-2 text-xs font-bold ${theme.text} outline-none`}
+                        />
+                        
+                        <div className="flex gap-2 items-center">
+                          <div className="flex-1 flex gap-2 items-center">
+                            <input 
+                              type="number" 
+                              value={newIngredientQty} 
+                              onChange={(e) => setNewIngredientQty(e.target.value)}
+                              className={`w-16 bg-transparent border-b ${theme.border} py-1 text-xs font-black text-center ${theme.text}`}
+                            />
+                            <div className={`flex ${theme.card} rounded-lg p-0.5 border ${theme.border} text-[9px] font-bold`}>
+                              <button 
+                                type="button" 
+                                onClick={() => setNewIngredientNameUnit('g')} 
+                                className={`px-2 py-0.5 rounded ${newIngredientUnit === 'g' ? theme.primary : theme.muted}`}
+                              >
+                                g
+                              </button>
+                              <button 
+                                type="button" 
+                                onClick={() => setNewIngredientNameUnit('ud')} 
+                                className={`px-2 py-0.5 rounded ${newIngredientUnit === 'ud' ? theme.primary : theme.muted}`}
+                              >
+                                ud
+                              </button>
+                            </div>
+                          </div>
+
+                          <button 
+                            type="button" 
+                            onClick={calculateCustomIngredientWithGemini}
+                            disabled={isCalculatingNewIngredient}
+                            className={`px-4 py-2 ${theme.primary} font-black text-[9px] uppercase tracking-widest rounded-xl hover:scale-105 transition-all flex items-center gap-1`}
+                          >
+                            {isCalculatingNewIngredient ? 'Calculando...' : 'Calcular con IA ✨'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {scanResult.foods.map((f, i) => {
                     const isUnits = f.unitType === 'ud';
