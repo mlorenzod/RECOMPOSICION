@@ -20,17 +20,17 @@ const selectRecipeImage = (title = '', ingredients = []) => {
   return RECIPE_IMAGES_DB.default[Math.floor(Math.random() * RECIPE_IMAGES_DB.default.length)];
 };
 
-// LISTA DETALLADA DE EQUIPAMIENTO
+// LISTA DETALLADA DE EQUIPAMIENTO (ESTILO UNIFICADO SIN ICONOS MEZCLADOS)
 const AVAILABLE_EQUIPMENT_OPTIONS = [
-  { id: 'mancuernas', label: 'Mancuernas', icon: '🏋️' },
-  { id: 'barra', label: 'Barra y Discos', icon: '🏋️‍♂️' },
-  { id: 'banco', label: 'Banco Ajustable', icon: '🪜' },
-  { id: 'kettlebell', label: 'Kettlebell / Pesa Rusa', icon: '🔔' },
-  { id: 'polea', label: 'Polea / Cables', icon: '🪢' },
-  { id: 'dominadas', label: 'Barra de Dominadas', icon: '🪵' },
-  { id: 'fondos', label: 'Paralelas / Fondos', icon: '🪜' },
-  { id: 'cuerda', label: 'Cuerda / Pliometría', icon: '🪢' },
-  { id: 'calistenia', label: 'Peso Corporal', icon: '🤸' }
+  { id: 'mancuernas', label: 'Mancuernas' },
+  { id: 'barra', label: 'Barra y Discos' },
+  { id: 'banco', label: 'Banco Ajustable' },
+  { id: 'kettlebell', label: 'Pesas Rusas (Kettlebells)' },
+  { id: 'polea', label: 'Poleas / Cables' },
+  { id: 'dominadas', label: 'Barra de Dominadas' },
+  { id: 'fondos', label: 'Barra de Fondos' },
+  { id: 'cuerda', label: 'Cuerda de Tríceps' },
+  { id: 'calistenia', label: 'Peso Corporal' }
 ];
 
 // ========== LISTA DE EJERCICIOS COMPUESTOS ==========
@@ -122,7 +122,6 @@ const WorkoutPlannerModal = ({ isOpen, onClose, onPlanGenerated, currentPlan }) 
           <button onClick={onClose} className="text-gray-500 font-bold text-xl hover:text-white transition-colors">✕</button>
         </div>
 
-        {/* AVISO MÉDICO LEGAL */}
         <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-[10px] text-amber-400 font-medium leading-relaxed">
           ⚠️ <strong>Aviso de Salud:</strong> Consulta a un profesional médico antes de iniciar cualquier plan de entrenamiento físico.
         </div>
@@ -152,9 +151,9 @@ const WorkoutPlannerModal = ({ isOpen, onClose, onPlanGenerated, currentPlan }) 
             <p className="text-sm text-gray-400 font-medium">Elige el enfoque principal:</p>
             <div className="space-y-2">
               {[
-                { id: 'fuerza', label: '⚡ Fuerza (5-8 repeticiones)' },
-                { id: 'hipertrofia', label: '💪 Hipertrofia (8-12 repeticiones)' },
-                { id: 'mixto', label: '🔀 Mixto (6-10 repeticiones)' }
+                { id: 'fuerza', label: 'Fuerza (5-8 repeticiones)' },
+                { id: 'hipertrofia', label: 'Hipertrofia (8-12 repeticiones)' },
+                { id: 'mixto', label: 'Mixto (6-10 repeticiones)' }
               ].map(opt => (
                 <button
                   key={opt.id}
@@ -174,7 +173,6 @@ const WorkoutPlannerModal = ({ isOpen, onClose, onPlanGenerated, currentPlan }) 
         {step === 3 && (
           <div className="space-y-4">
             <div className="text-center space-y-2">
-              <span className="text-4xl block">🏋️</span>
               <h4 className="text-white font-black text-lg">Rutina generada</h4>
               <p className="text-xs text-gray-400">
                 {days} días / semana · Enfoque: {focus}
@@ -519,7 +517,7 @@ export default function App() {
   };
 
   const handleEquipmentToggle = (equipId) => {
-    const currentEquip = editProfile?.equipamientoArray || ['gimnasio'];
+    const currentEquip = editProfile?.equipamientoArray || ['mancuernas'];
     const exists = currentEquip.includes(equipId);
     let updated = [];
     if (exists) {
@@ -561,7 +559,6 @@ export default function App() {
 
       const newExData = JSON.parse(jsonMatch[0]);
 
-      // Actualizar el plan de entrenamiento
       const dayOfWeek = ((selectedDay - 1) % 7) + 1;
       const updatedPlan = { ...workoutPlan };
       if (updatedPlan.sessions[dayOfWeek]) {
@@ -594,7 +591,7 @@ export default function App() {
   const generateInitialRoutine = async (profileData) => {
     setAuthStep('generating_routine');
     try {
-      const equipText = (profileData.equipamientoArray || ['gimnasio']).join(', ');
+      const equipText = (profileData.equipamientoArray || ['mancuernas']).join(', ');
       const prompt = `Actúa como un Head Coach especialista en hipertrofia basada en evidencia. 
       Diseña una rutina Torso/Pierna (Upper/Lower) de 3 ejercicios por día para un usuario cuyo objetivo es: ${profileData.objetivo || 'Recomposición'} y dispone ÚNICAMENTE de este equipamiento: ${equipText}.
       Devuelve SOLO un JSON estricto con esta estructura exacta:
@@ -1158,7 +1155,6 @@ export default function App() {
   const scanTotalCal = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.cal || 0), 0) : 0;
   const scanTotalProt = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.prot || 0), 0) : 0;
 
-  // CÁLCULO DE MACROS RESTANTES Y COLORES
   const protDiff = targetMacros.protein - currentMacros.protein;
   const carbsDiff = targetMacros.carbs - currentMacros.carbs;
   const fatDiff = targetMacros.fat - currentMacros.fat;
@@ -1317,7 +1313,6 @@ export default function App() {
                         <button onClick={() => handleLogSet(ex.id, 20, 5)} className={`flex-1 py-4 ${theme.primary} font-black rounded-full text-[10px] uppercase tracking-widest`}>
                           Añadir Set
                         </button>
-                        {/* BOTÓN CAMBIAR EJERCICIO POR GUSTO CON IA */}
                         <button 
                           onClick={() => replaceExerciseWithAI(ex)} 
                           disabled={isReplacing}
@@ -1339,7 +1334,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ======================= MÓDULO NUTRICIÓN (REDISEÑADO CON MACROS Y COLORES) ======================= */}
+        {/* ======================= MÓDULO NUTRICIÓN ======================= */}
         {activeTab === 'nutricion' && (
           <div className="space-y-8 animate-fadeIn">
             
@@ -1366,13 +1361,12 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* DESGLOSE DETALLADO DE CADA MACRO CON COLORES Y GRAMOS RESTANTES */}
                 <div className="space-y-4 flex-1 text-[10px] font-bold">
                   
-                  {/* PROTEÍNAS (ESMERALDA) */}
+                  {/* PROTEÍNAS */}
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <span className="text-emerald-500 font-extrabold uppercase">🥩 Prot</span>
+                      <span className="text-emerald-500 font-extrabold uppercase">Prot</span>
                       <span className={theme.text}>{currentMacros.protein}g <span className={theme.muted}>/ {targetMacros.protein}g</span></span>
                     </div>
                     <div className={`h-2 ${isDark ? 'bg-gray-900' : 'bg-gray-200'} rounded-full overflow-hidden`}>
@@ -1383,10 +1377,10 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* CARBOHIDRATOS (AZUL) */}
+                  {/* CARBOHIDRATOS */}
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <span className="text-blue-500 font-extrabold uppercase">🍞 Carbs</span>
+                      <span className="text-blue-500 font-extrabold uppercase">Carbs</span>
                       <span className={theme.text}>{currentMacros.carbs}g <span className={theme.muted}>/ {targetMacros.carbs}g</span></span>
                     </div>
                     <div className={`h-2 ${isDark ? 'bg-gray-900' : 'bg-gray-200'} rounded-full overflow-hidden`}>
@@ -1397,10 +1391,10 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* GRASAS (ÁMBAR/NARANJA) */}
+                  {/* GRASAS */}
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <span className="text-amber-500 font-extrabold uppercase">🥑 Fats</span>
+                      <span className="text-amber-500 font-extrabold uppercase">Fats</span>
                       <span className={theme.text}>{currentMacros.fat}g <span className={theme.muted}>/ {targetMacros.fat}g</span></span>
                     </div>
                     <div className={`h-2 ${isDark ? 'bg-gray-900' : 'bg-gray-200'} rounded-full overflow-hidden`}>
@@ -1433,7 +1427,7 @@ export default function App() {
               </form>
             </div>
 
-            {/* TARJETA DE CONFIRMACIÓN CON BARRAS HIGH-CONTRAST */}
+            {/* TARJETA DE CONFIRMACIÓN */}
             {scanResult && (
               <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-6 space-y-6 animate-fadeIn ${theme.shadow} relative overflow-hidden`}>
                 <div className={`flex items-start justify-between border-b ${theme.border} pb-4`}>
@@ -1461,7 +1455,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* BOTÓN PARA ABRIR GRÁFICO DE PORCENTAJES/DISTRIBUCIÓN DEL PLATOS */}
                 <button 
                   type="button" 
                   onClick={() => setShowMacroBreakdownChart(!showMacroBreakdownChart)}
@@ -1471,7 +1464,6 @@ export default function App() {
                   <span>{showMacroBreakdownChart ? '▲' : '▼'}</span>
                 </button>
 
-                {/* PANEL DESPLEGABLE CON PORCENTAJES Y MACROS A TIEMPO REAL */}
                 {showMacroBreakdownChart && (
                   <div className={`p-4 ${theme.secondary} rounded-2xl border ${theme.border} space-y-3 animate-fadeIn`}>
                     <span className={`text-[9px] ${theme.muted} font-bold uppercase tracking-widest block border-b ${theme.border} pb-2`}>Aporte (%) por ingrediente al total del plato</span>
@@ -1505,10 +1497,9 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* FORMULARIO PARA AGREGAR NUEVO INGREDIENTE Y RECONECTAR CON LA IA */}
                   {showCustomIngredientForm && (
                     <div className={`p-4 ${theme.secondary} rounded-2xl border border-blue-500/30 space-y-3 animate-fadeIn`}>
-                      <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block">🤖 Consultar Ingrediente a la IA</span>
+                      <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block">Consultar Ingrediente a la IA</span>
                       
                       <div className="space-y-2">
                         <input 
@@ -1573,7 +1564,6 @@ export default function App() {
                             className={`font-bold text-sm bg-transparent border-b ${theme.border} ${theme.text} outline-none flex-1`}
                           />
                           
-                          {/* SELECTOR GRAMOS / UNIDADES */}
                           <div className={`flex ${theme.card} rounded-xl p-1 border ${theme.border} text-[9px] font-bold`}>
                             <button 
                               type="button"
@@ -1596,7 +1586,6 @@ export default function App() {
                           </button>
                         </div>
 
-                        {/* CONTROLES Y BARRA SLIDER INTUITIVA */}
                         <div className="space-y-2 pt-1">
                           <div className="flex items-center justify-between">
                             <span className={`text-[10px] font-bold ${theme.muted} uppercase tracking-widest`}>Cantidad:</span>
@@ -1605,7 +1594,6 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* BARRA SLIDER HIGH-CONTRAST */}
                           <input 
                             type="range" 
                             min={isUnits ? "0.5" : "5"} 
@@ -1617,7 +1605,6 @@ export default function App() {
                           />
                         </div>
 
-                        {/* VALORES DE MACROS A TIEMPO REAL CON COLORES */}
                         <div className={`font-semibold uppercase tracking-wider text-[9px] flex justify-between pt-2 border-t ${theme.border}`}>
                           <span className={theme.text}>🔥 {f.cal} kcal</span>
                           <span className="text-emerald-500 font-bold">🥩 {f.prot}g P</span>
@@ -2150,7 +2137,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE AJUSTES Y CONFIGURACIÓN (SELECTOR MÚLTIPLE DE MATERIAL DETALLADO) */}
+      {/* MODAL DE AJUSTES Y CONFIGURACIÓN (SELECTOR MÚLTIPLE DE MATERIAL UNIFICADO) */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -2222,30 +2209,29 @@ export default function App() {
                   onChange={(e) => setEditProfile({ ...editProfile, objetivo: e.target.value })}
                   className={`w-full bg-transparent border-b ${theme.border} py-2 text-xs font-bold outline-none`}
                 >
-                  <option value="Perder Grasa" className={isDark ? "bg-black" : "bg-white"}>🔥 Perder Grasa / Definición</option>
-                  <option value="Recomposición" className={isDark ? "bg-black" : "bg-white"}>⚖️ Recomposición Corporal</option>
-                  <option value="Ganar Músculo" className={isDark ? "bg-black" : "bg-white"}>💪 Ganar Músculo / Volumen</option>
+                  <option value="Perder Grasa" className={isDark ? "bg-black" : "bg-white"}>Perder Grasa / Definición</option>
+                  <option value="Recomposición" className={isDark ? "bg-black" : "bg-white"}>Recomposición Corporal</option>
+                  <option value="Ganar Músculo" className={isDark ? "bg-black" : "bg-white"}>Ganar Músculo / Volumen</option>
                 </select>
               </div>
 
-              {/* SELECTOR GRANULAR Y MÚLTIPLE DE EQUIPAMIENTO */}
+              {/* SELECTOR GRANULAR DE EQUIPAMIENTO SIN ICONOS MEZCLADOS */}
               <div>
-                <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-2`}>Equipamiento Disponible (Selecciona el tuyo)</label>
+                <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-2`}>Equipamiento Disponible</label>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
                   {AVAILABLE_EQUIPMENT_OPTIONS.map((equip) => {
-                    const selected = (editProfile?.equipamientoArray || ['gimnasio']).includes(equip.id);
+                    const selected = (editProfile?.equipamientoArray || ['mancuernas']).includes(equip.id);
                     return (
                       <button
                         key={equip.id}
                         type="button"
                         onClick={() => handleEquipmentToggle(equip.id)}
-                        className={`p-2.5 rounded-2xl border text-[10px] font-bold flex items-center gap-2 transition-all ${
+                        className={`p-2.5 rounded-2xl border text-[10px] font-bold flex items-center justify-center transition-all ${
                           selected 
                             ? isDark ? 'bg-white text-black border-white' : 'bg-black text-white border-black' 
                             : `${theme.secondary} ${theme.border} ${theme.muted}`
                         }`}
                       >
-                        <span>{equip.icon}</span>
                         <span className="truncate">{equip.label}</span>
                       </button>
                     );
