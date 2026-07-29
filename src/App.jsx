@@ -606,7 +606,7 @@ export default function App() {
     }
   };
 
-  // NUEVA FUNCIÓN: CALCULAR UN INGREDIENTE MANUAL USANDO IA
+  // NUTRITION AI INGREDIENT CALCULATOR (CORREGIDO PARA INTERFAZ VERCEL)
   const calculateCustomIngredientWithGemini = async () => {
     if (!newIngredientName.trim()) return alert("Ingresa el nombre del alimento.");
     if (!verifyAccessOrShowPaywall()) return;
@@ -614,16 +614,16 @@ export default function App() {
     setIsCalculatingNewIngredient(true);
     try {
       const qtyNum = parseFloat(newIngredientQty) || 100;
-      const prompt = `Calcula de forma exacta la información nutricional para: "${qtyNum} ${newIngredientNameUnit === 'ud' ? 'unidades de' : 'gramos de'} ${newIngredientName}".
-      Devuelve SOLO un JSON estricto con esta estructura:
-      {"name": "${newIngredientName}", "unitType": "${newIngredientNameUnit}", "grams": ${qtyNum}, "unitWeight": ${newIngredientNameUnit === 'ud' ? 60 : 1}, "cal": 150, "prot": 10, "carbs": 15, "fat": 2}`;
+      const promptText = `Devuelve ÚNICAMENTE un JSON estricto sin bloques markdown para la información nutricional de: "${qtyNum} ${newIngredientUnit === 'ud' ? 'unidades de' : 'gramos de'} ${newIngredientName}".
+      Estructura estricta:
+      {"name": "${newIngredientName}", "unitType": "${newIngredientUnit}", "grams": ${qtyNum}, "unitWeight": ${newIngredientUnit === 'ud' ? 60 : 1}, "cal": 150, "prot": 10, "carbs": 15, "fat": 2}`;
 
       const response = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'gemini-3.5-flash-lite',
-          parts: [{ text: prompt }],
+          parts: [{ text: promptText }],
           generationConfig: { responseMimeType: 'application/json' }
         })
       });
@@ -637,19 +637,24 @@ export default function App() {
 
       const calcData = JSON.parse(jsonMatch[0]);
 
+      const cal = parseFloat(calcData.cal) || 0;
+      const prot = parseFloat(calcData.prot) || 0;
+      const carbs = parseFloat(calcData.carbs) || 0;
+      const fat = parseFloat(calcData.fat) || 0;
+
       const newItem = {
         name: calcData.name || newIngredientName,
-        unitType: newIngredientNameUnit,
+        unitType: newIngredientUnit,
         grams: qtyNum,
-        unitWeight: calcData.unitWeight || 1,
-        cal: calcData.cal || 0,
-        prot: calcData.prot || 0,
-        carbs: calcData.carbs || 0,
-        fat: calcData.fat || 0,
-        baseCalPerUnit: calcData.cal / qtyNum,
-        baseProtPerUnit: calcData.prot / qtyNum,
-        baseCarbsPerUnit: calcData.carbs / qtyNum,
-        baseFatPerUnit: calcData.fat / qtyNum,
+        unitWeight: parseFloat(calcData.unitWeight) || 1,
+        cal: Math.round(cal),
+        prot: Math.round(prot),
+        carbs: Math.round(carbs),
+        fat: Math.round(fat),
+        baseCalPerUnit: cal / qtyNum,
+        baseProtPerUnit: prot / qtyNum,
+        baseCarbsPerUnit: carbs / qtyNum,
+        baseFatPerUnit: fat / qtyNum,
       };
 
       setScanResult(prev => ({ ...prev, foods: [...prev.foods, newItem] }));
@@ -1063,7 +1068,6 @@ export default function App() {
   const currentWorldIndex = Math.floor((selectedDay - 1) / 10);
   const currentWorldObj = MARIO_WORLDS[currentWorldIndex] || MARIO_WORLDS[0];
 
-  // CÁLCULOS DINÁMICOS DE TOTALES Y PORCENTAJES DEL PLATOS
   const scanTotalCal = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.cal || 0), 0) : 0;
   const scanTotalProt = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.prot || 0), 0) : 0;
 
@@ -1368,7 +1372,7 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* FORMULARIO PARA AGREGAR NUEVO INGREDIENTE Y RECONECTAR CON LA IA */}
+                  {/* FORMULARIO PARA AGREGAR NUEVO INGREDIENTE Y RECONECTAR CON LA IA (CORREGIDO Y OPERATIVO) */}
                   {showCustomIngredientForm && (
                     <div className={`p-4 ${theme.secondary} rounded-2xl border border-blue-500/30 space-y-3 animate-fadeIn`}>
                       <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block">🤖 Consultar Ingrediente a la IA</span>
