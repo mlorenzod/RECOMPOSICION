@@ -322,7 +322,6 @@ export default function App() {
   const [isPro, setIsPro] = useState(() => isDeveloper || localStorage.getItem(`${userKey}_is_pro`) === 'true');
   const [showPaywallModal, setShowPaywallModal] = useState(false);
 
-  // Cálculo de días transcurridos desde el registro
   const calculateDaysSinceTrial = () => {
     const diffTime = Math.abs(new Date() - new Date(trialStartDate));
     return Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -332,7 +331,6 @@ export default function App() {
   const trialDaysLeft = Math.max(0, 7 - daysSinceTrial);
   const isTrialActive = daysSinceTrial < 7;
 
-  // Validación de acceso a funciones IA
   const verifyAccessOrShowPaywall = () => {
     if (isPro || isDeveloper || isTrialActive) return true;
     setShowPaywallModal(true);
@@ -543,7 +541,8 @@ export default function App() {
     setIsScanning(true);
     try {
       const systemInstruction = `Analiza la siguiente comida. Devuelve SOLO un JSON estricto sin bloques markdown. Formato exacto:
-      {"dishName": "Nombre del plato", "foods": [{"name": "Ingrediente", "grams": 150, "cal": 220, "prot": 25, "carbs": 20, "fat": 8}], "goalFeedback": "Un comentario breve y motivador en máximo 12 palabras."}`;
+      {"dishName": "Nombre del plato", "foods": [{"name": "Ingrediente", "unitType": "g", "grams": 150, "unitWeight": 100, "cal": 220, "prot": 25, "carbs": 20, "fat": 8}], "goalFeedback": "Un comentario breve y motivador en máximo 12 palabras."}
+      Instrucción sobre unitType: si el alimento se cuenta mejor por unidades (ej. huevo, manzana, rebanada de pan), coloca "ud", asigna grams como número de unidades y coloca en unitWeight el peso en gramos de 1 unidad. De lo contrario, asigna unitType "g" y unitWeight 1.`;
 
       let parts = [];
       if (typeof promptContent === 'string') {
@@ -575,10 +574,22 @@ export default function App() {
       if (!jsonMatch) throw new Error('Formato de respuesta inválido');
       
       const scanData = JSON.parse(jsonMatch[0]);
+
+      // Asegurar campos por defecto para la recarga dinámica
+      const formattedFoods = scanData.foods.map(f => ({
+        ...f,
+        unitType: f.unitType || 'g',
+        unitWeight: f.unitWeight || (f.unitType === 'ud' ? 60 : 1),
+        baseCalPerUnit: (f.cal / (f.grams || 1)),
+        baseProtPerUnit: (f.prot / (f.grams || 1)),
+        baseCarbsPerUnit: (f.carbs / (f.grams || 1)),
+        baseFatPerUnit: (f.fat / (f.grams || 1)),
+      }));
+
       setScanResult({
         dishName: scanData.dishName,
         img: promptContent.previewUrl || null,
-        foods: scanData.foods,
+        foods: formattedFoods,
         goalFeedback: scanData.goalFeedback
       });
       setUserXP(prev => prev + 50);
@@ -662,25 +673,62 @@ export default function App() {
     }
   };
 
-  const handleFoodPropertyChange = (index, field, value) => {
+  // ================================================================
+  // BARRAS SELECTORAS DINÁMICAS (UNIDADES O GRAMOS CON RECÁLCULO)
+  // ================================================================
+  const handleFoodQuantityChange = (index, newQuantity) => {
     if (!scanResult) return;
     const updatedFoods = [...scanResult.foods];
     const currentFood = { ...updatedFoods[index] };
 
-    if (field === 'grams') {
-      const newGrams = Math.max(0, parseFloat(value) || 0);
-      const ratio = currentFood.grams > 0 ? newGrams / currentFood.grams : 1;
-      
-      currentFood.grams = newGrams;
-      currentFood.cal = Math.round(currentFood.cal * ratio);
-      currentFood.prot = Math.round(currentFood.prot * ratio);
-      currentFood.carbs = Math.round(currentFood.carbs * ratio);
-      currentFood.fat = Math.round(currentFood.fat * ratio);
-    } else {
-      currentFood[field] = value;
+    const qty = Math.max(0, parseFloat(newQuantity) || 0);
+    currentFood.grams = qty;
+
+    const baseCal = currentFood.baseCalPerUnit || (currentFood.cal / (qty || 1));
+    const baseProt = currentFood.baseProtPerUnit || (currentFood.prot / (qty || 1));
+    const baseCarbs = currentFood.baseCarbsPerUnit || (currentFood.carbs / (qty || 1));
+    const baseFat = currentFood.baseFatPerUnit || (currentFood.fat / (qty || 1));
+
+    currentFood.cal = Math.round(baseCal * qty);
+    currentFood.prot = Math.round(baseProt * qty);
+    currentFood.carbs = Math.round(baseCarbs * qty);
+    currentFood.fat = Math.round(baseFat * qty);
+
+    updatedFoods[index] = currentFood;
+    setScanResult({ ...scanResult, foods: updatedFoods });
+  };
+
+  const handleUnitTypeToggle = (index, newUnit) => {
+    if (!scanResult) return;
+    const updatedFoods = [...scanResult.foods];
+    const currentFood = { ...updatedFoods[index] };
+
+    if (currentFood.unitType !== newUnit) {
+      currentFood.unitType = newUnit;
+      if (newUnit === 'ud') {
+        currentFood.grams = 1; // 1 Unidad por defecto
+        currentFood.unitWeight = currentFood.unitWeight || 60;
+        currentFood.baseCalPerUnit = currentFood.cal;
+        currentFood.baseProtPerUnit = currentFood.prot;
+        currentFood.baseCarbsPerUnit = currentFood.carbs;
+        currentFood.baseFatPerUnit = currentFood.fat;
+      } else {
+        currentFood.grams = 100; // 100g por defecto
+        currentFood.baseCalPerUnit = currentFood.cal / 100;
+        currentFood.baseProtPerUnit = currentFood.prot / 100;
+        currentFood.baseCarbsPerUnit = currentFood.carbs / 100;
+        currentFood.baseFatPerUnit = currentFood.fat / 100;
+      }
     }
 
     updatedFoods[index] = currentFood;
+    setScanResult({ ...scanResult, foods: updatedFoods });
+  };
+
+  const handleFoodNameChange = (index, newName) => {
+    if (!scanResult) return;
+    const updatedFoods = [...scanResult.foods];
+    updatedFoods[index].name = newName;
     setScanResult({ ...scanResult, foods: updatedFoods });
   };
 
@@ -692,7 +740,19 @@ export default function App() {
 
   const handleAddFoodItem = () => {
     if (!scanResult) return;
-    const newItem = { name: "Nuevo ingrediente", grams: 100, cal: 150, prot: 10, carbs: 15, fat: 5 };
+    const newItem = { 
+      name: "Nuevo ingrediente", 
+      unitType: "g", 
+      grams: 100, 
+      cal: 120, 
+      prot: 10, 
+      carbs: 15, 
+      fat: 3,
+      baseCalPerUnit: 1.2,
+      baseProtPerUnit: 0.1,
+      baseCarbsPerUnit: 0.15,
+      baseFatPerUnit: 0.03
+    };
     setScanResult({ ...scanResult, foods: [...scanResult.foods, newItem] });
   };
 
@@ -1188,7 +1248,7 @@ export default function App() {
               </form>
             </div>
 
-            {/* TARJETA DE CONFIRMACIÓN DE LECTURA DE IA */}
+            {/* TARJETA DE CONFIRMACIÓN DE LECTURA DE IA (CON BARRAS SELECTORAS DINÁMICAS Y UNIDADES) */}
             {scanResult && (
               <div className={`${theme.card} border border-green-500/30 rounded-[2.5rem] p-6 space-y-6 animate-fadeIn shadow-2xl relative overflow-hidden`}>
                 <div className="flex items-start justify-between border-b border-white/10 pb-4">
@@ -1216,48 +1276,88 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <span className={`text-[9px] ${theme.muted} font-bold uppercase tracking-widest`}>Ajustar Ingredientes y Cantidades</span>
+                    <span className={`text-[9px] ${theme.muted} font-bold uppercase tracking-widest`}>Ajustar Cantidades con Barra</span>
                     <button onClick={handleAddFoodItem} className="text-[10px] font-bold text-green-400 hover:underline flex items-center gap-1">
                       <span>+</span> Añadir ingrediente
                     </button>
                   </div>
 
-                  {scanResult.foods.map((f, i) => (
-                    <div key={i} className={`space-y-2 ${theme.secondary} p-3.5 rounded-2xl border ${theme.border}`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <input 
-                          type="text" 
-                          value={f.name} 
-                          onChange={(e) => handleFoodPropertyChange(i, 'name', e.target.value)}
-                          className="font-bold text-sm bg-transparent border-b border-transparent hover:border-white/20 focus:border-white outline-none flex-1"
-                        />
-                        <button onClick={() => handleRemoveFoodItem(i)} title="Eliminar ingrediente" className="text-gray-500 hover:text-red-400 text-xs p-1">
-                          🗑️
-                        </button>
-                      </div>
+                  {scanResult.foods.map((f, i) => {
+                    const isUnits = f.unitType === 'ud';
+                    const maxSliderVal = isUnits ? 10 : 500;
+                    const stepVal = isUnits ? 0.5 : 5;
 
-                      <div className="flex items-center justify-between pt-1 text-[10px] gap-2">
-                        <div className="flex items-center gap-1 bg-black/30 px-3 py-1.5 rounded-xl border border-white/10">
+                    return (
+                      <div key={i} className={`space-y-3 ${theme.secondary} p-4 rounded-2xl border ${theme.border}`}>
+                        <div className="flex items-center justify-between gap-2">
                           <input 
-                            type="number" 
-                            value={f.grams} 
-                            onChange={(e) => handleFoodPropertyChange(i, 'grams', e.target.value)}
-                            className="w-12 bg-transparent text-right font-black text-xs outline-none text-green-400"
+                            type="text" 
+                            value={f.name} 
+                            onChange={(e) => handleFoodNameChange(i, e.target.value)}
+                            className="font-bold text-sm bg-transparent border-b border-transparent hover:border-white/20 focus:border-white outline-none flex-1"
                           />
-                          <span className={theme.muted}>g</span>
+                          
+                          {/* SELECTOR GRAMOS / UNIDADES */}
+                          <div className="flex bg-black/40 rounded-xl p-1 border border-white/10 text-[9px] font-bold">
+                            <button 
+                              type="button"
+                              onClick={() => handleUnitTypeToggle(i, 'g')}
+                              className={`px-2.5 py-1 rounded-lg transition-all ${!isUnits ? 'bg-white text-black' : 'text-gray-400'}`}
+                            >
+                              Gramos
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => handleUnitTypeToggle(i, 'ud')}
+                              className={`px-2.5 py-1 rounded-lg transition-all ${isUnits ? 'bg-white text-black' : 'text-gray-400'}`}
+                            >
+                              Unidades
+                            </button>
+                          </div>
+
+                          <button onClick={() => handleRemoveFoodItem(i)} title="Eliminar ingrediente" className="text-gray-500 hover:text-red-400 text-xs p-1">
+                            🗑️
+                          </button>
                         </div>
-                        
-                        <div className={`font-semibold ${theme.muted} uppercase tracking-wider text-[9px] flex gap-2`}>
+
+                        {/* CONTROLES Y BARRA SELECTORA */}
+                        <div className="space-y-2 pt-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cantidad:</span>
+                            <div className="flex items-center gap-1 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
+                              <input 
+                                type="number" 
+                                value={f.grams} 
+                                onChange={(e) => handleFoodQuantityChange(i, e.target.value)}
+                                className="w-12 bg-transparent text-right font-black text-xs outline-none text-green-400"
+                              />
+                              <span className="text-xs font-bold text-green-400">{isUnits ? 'ud' : 'g'}</span>
+                            </div>
+                          </div>
+
+                          {/* BARRA SLIDER INTUITIVA */}
+                          <input 
+                            type="range" 
+                            min={isUnits ? "0.5" : "5"} 
+                            max={maxSliderVal} 
+                            step={stepVal}
+                            value={f.grams} 
+                            onChange={(e) => handleFoodQuantityChange(i, e.target.value)}
+                            className="w-full accent-green-400 h-1.5 bg-black/50 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+
+                        <div className={`font-semibold ${theme.muted} uppercase tracking-wider text-[9px] flex justify-between pt-1 border-t border-white/5`}>
                           <span>🔥 {f.cal} kcal</span>
                           <span>🥩 {f.prot}g P</span>
                           <span>🍞 {f.carbs}g C</span>
                           <span>🥑 {f.fat}g F</span>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="flex gap-3 pt-2">
