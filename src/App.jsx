@@ -334,13 +334,13 @@ export default function App() {
   const [isPro, setIsPro] = useState(() => isDeveloper || localStorage.getItem(`${userKey}_is_pro`) === 'true');
   const [showPaywallModal, setShowPaywallModal] = useState(false);
 
-  // === ESTADO DE RUTINA (Dinámica) - Ahora manejado por workoutPlan ===
+  // === ESTADO DE RUTINA (Dinámica) - Manejado por workoutPlan ===
   const [workouts, setWorkouts] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_workouts`);
     return saved ? JSON.parse(saved) : null;
   });
 
-  // NUEVO: Plan de entrenamiento personalizado
+  // Plan de entrenamiento personalizado
   const [workoutPlan, setWorkoutPlan] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_workout_plan`);
     if (saved) {
@@ -433,6 +433,7 @@ export default function App() {
 
   const fileInputRef = useRef(null);
   const mealFileInputRef = useRef(null);
+  const mealCameraInputRef = useRef(null); // Ref para cámara en vivo de nutrición
   const videoRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState('entreno');
@@ -440,7 +441,6 @@ export default function App() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedWorldModal, setSelectedWorldModal] = useState(null);
-  const [bannedExercisesList, setBannedExercisesList] = useState([]);
   
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
@@ -455,7 +455,6 @@ export default function App() {
   const [trackerWaist, setTrackerWaist] = useState('');
   const [trackerChest, setTrackerChest] = useState('');
   const [trackerArm, setTrackerArm] = useState('');
-  const [swappingId, setSwappingId] = useState(null);
 
   const useCredit = () => {
     if (isPro || isDeveloper) return true;
@@ -468,7 +467,7 @@ export default function App() {
   };
 
   // ================================================================
-  //  FUNCIONES QUE USAN IA (AHORA LLAMAN A /api/gemini)
+  //  FUNCIONES IA & GEMINI
   // ================================================================
 
   const generateInitialRoutine = async (profileData) => {
@@ -484,13 +483,7 @@ export default function App() {
         "pierna": [
           { "id": "p1", "name": "Nombre Ejercicio", "target": "Músculo", "defaultPR": 40, "sets": "4 x 8-10", "img": "https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=600&q=80", "alts": ["Alt1", "Alt2"] }
         ]
-      }
-      Usa estas imágenes de Unsplash aleatoriamente para el campo 'img':
-      "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=80"
-      "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=600&q=80"
-      "https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=600&q=80"
-      "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&q=80"
-      "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=600&q=80"`;
+      }`;
 
       const response = await fetch('/api/gemini', {
         method: 'POST',
@@ -550,7 +543,7 @@ export default function App() {
       if (!response.ok) throw new Error(data.error || 'Error en el backend');
 
       const jsonMatch = data.text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('Invalid response format');
+      if (!jsonMatch) throw new Error('Formato de respuesta inválido');
       
       const scanData = JSON.parse(jsonMatch[0]);
       setScanResult({
@@ -561,14 +554,14 @@ export default function App() {
       });
       setUserXP(prev => prev + 50);
     } catch (error) {
-      console.error(error);
-      alert("Error procesando los datos. Revisa la consola o tu API Key.");
+      console.error("Error procesando la comida:", error);
+      alert("No se pudo procesar la lectura. Por favor, intenta de nuevo.");
     } finally {
       setIsScanning(false);
     }
   };
 
-  // ========== FUNCIÓN AÑADIDA: handleMealImageUpload ==========
+  // Manejo de carga de imagen desde galería o cámara
   const handleMealImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -582,7 +575,6 @@ export default function App() {
     reader.readAsDataURL(file);
     e.target.value = '';
   };
-  // =============================================================
 
   const handleTextFoodSubmit = (e) => { 
     e.preventDefault(); 
@@ -594,7 +586,9 @@ export default function App() {
 
   const handleToggleAudioRecording = async () => {
     if (isRecordingAudio) {
-      if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
       setIsRecordingAudio(false);
     } else {
       try {
@@ -602,20 +596,33 @@ export default function App() {
         audioChunksRef.current = [];
         const mediaRecorder = new MediaRecorder(stream);
         mediaRecorderRef.current = mediaRecorder;
-        mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
+        
+        mediaRecorder.ondataavailable = (event) => { 
+          if (event.data.size > 0) audioChunksRef.current.push(event.data); 
+        };
+        
         mediaRecorder.onstop = async () => {
           const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
           const reader = new FileReader();
           reader.onloadend = () => {
             const base64Audio = reader.result.split(',')[1];
-            processFoodWithGemini({ inlineData: { mimeType: mediaRecorder.mimeType.split(';')[0] || 'audio/webm', data: base64Audio } });
+            processFoodWithGemini({ 
+              inlineData: { 
+                mimeType: mediaRecorder.mimeType.split(';')[0] || 'audio/webm', 
+                data: base64Audio 
+              } 
+            });
           };
           reader.readAsDataURL(audioBlob);
           stream.getTracks().forEach(track => track.stop());
         };
+
         mediaRecorder.start();
         setIsRecordingAudio(true);
-      } catch (err) { alert("No se pudo acceder al micrófono."); }
+      } catch (err) { 
+        console.error("Error al acceder al micrófono:", err);
+        alert("No se pudo acceder al micrófono. Verifica los permisos de tu navegador."); 
+      }
     }
   };
 
@@ -655,7 +662,7 @@ export default function App() {
       if (!response.ok) throw new Error(data.error || 'Error en el backend');
 
       const jsonMatch = data.text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('Invalid response format');
+      if (!jsonMatch) throw new Error('Formato de respuesta inválido');
       
       const recipeData = JSON.parse(jsonMatch[0]);
       recipeData.img = selectRecipeImage(recipeData.title, recipeData.ingredients);
@@ -696,19 +703,21 @@ export default function App() {
       }
     } catch (err) { 
       console.error(err);
-      alert('Error al generar estudio.'); 
+      alert('Error al generar el estudio.'); 
     } finally { 
       setIsAnalyzingStrategy(false); 
     }
   };
 
   // ================================================================
-  //  RESTO DE FUNCIONES (SIN CAMBIOS)
+  //  UTILIDADES
   // ================================================================
 
   const processAndAlignImage = (sourceImage, targetWidth = 1080) => {
     const targetHeight = (targetWidth * 16) / 9;
-    const canvas = document.createElement('canvas'); canvas.width = targetWidth; canvas.height = targetHeight;
+    const canvas = document.createElement('canvas'); 
+    canvas.width = targetWidth; 
+    canvas.height = targetHeight;
     const ctx = canvas.getContext('2d');
     const sourceRatio = sourceImage.width / sourceImage.height;
     const targetRatio = targetWidth / targetHeight;
@@ -745,22 +754,38 @@ export default function App() {
   const startCamera = async () => {
     setShowCameraModal(true);
     setTimeout(async () => {
-      try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", aspectRatio: 9/16 } }); if (videoRef.current) videoRef.current.srcObject = stream; } 
-      catch (err) { alert("No se pudo acceder a la cámara."); setShowCameraModal(false); }
+      try { 
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", aspectRatio: 9/16 } }); 
+        if (videoRef.current) videoRef.current.srcObject = stream; 
+      } catch (err) { 
+        alert("No se pudo acceder a la cámara."); 
+        setShowCameraModal(false); 
+      }
     }, 300);
   };
-  const stopCamera = () => { if (videoRef.current?.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop()); setShowCameraModal(false); };
+
+  const stopCamera = () => { 
+    if (videoRef.current?.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop()); 
+    setShowCameraModal(false); 
+  };
+
   const capturePhoto = () => {
     if (videoRef.current) {
-      const canvas = document.createElement('canvas'); canvas.width = videoRef.current.videoWidth; canvas.height = videoRef.current.videoHeight;
+      const canvas = document.createElement('canvas'); 
+      canvas.width = videoRef.current.videoWidth; 
+      canvas.height = videoRef.current.videoHeight;
       canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
       const img = new Image();
-      img.onload = () => { setUserPhotos(prev => ({ ...prev, [selectedDay]: processAndAlignImage(img) })); stopCamera(); };
+      img.onload = () => { 
+        setUserPhotos(prev => ({ ...prev, [selectedDay]: processAndAlignImage(img) })); 
+        stopCamera(); 
+      };
       img.src = canvas.toDataURL('image/jpeg');
     }
   };
 
   const toggleRestDay = (dayNum) => setRestDays(prev => ({ ...prev, [dayNum]: !prev[dayNum] }));
+  
   const handleLogSet = (exId, weight, reps) => {
     const logKey = `day_${selectedDay}_${exId}`;
     setLogs(prev => ({ ...prev, [logKey]: [...(prev[logKey] || []), { weight, reps }] }));
@@ -813,7 +838,7 @@ export default function App() {
 
   const rootStyle = { fontFamily: "'Montserrat', sans-serif" };
 
-  // ========================== PANTALLA DE CARGA (IA GENERANDO) ==========================
+  // ========================== PANTALLA DE CARGA ==========================
   if (authStep === 'generating_routine') {
     return (
       <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col items-center justify-center p-6 transition-colors duration-500`}>
@@ -873,8 +898,10 @@ export default function App() {
 
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
+      {/* Inputs Ocultos de Selección de Archivos */}
       <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleMultipleFileUpload} />
       <input type="file" ref={mealFileInputRef} accept="image/*" className="hidden" onChange={handleMealImageUpload} />
+      <input type="file" ref={mealCameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleMealImageUpload} />
 
       {/* HEADER */}
       <header className={`sticky top-0 z-40 ${theme.navBg} backdrop-blur-xl border-b ${theme.border} px-6 py-4 flex justify-between items-center transition-colors duration-500`}>
@@ -938,7 +965,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Botón para planificar */}
             <button
               onClick={() => setShowPlanner(true)}
               className="w-full py-4 rounded-full text-xs font-black uppercase tracking-widest bg-[#222] border border-white/10 text-white hover:bg-white hover:text-black transition-all"
@@ -946,7 +972,6 @@ export default function App() {
               {workoutPlan.days.length > 0 ? 'Cambiar plan de entrenamiento' : 'Planificar entrenamiento'}
             </button>
 
-            {/* Información del plan actual */}
             <div className={`${theme.card} border ${theme.border} rounded-2xl p-4 text-xs flex justify-between items-center`}>
               <div>
                 <span className="font-bold">{workoutPlan.days.length} días/sem</span>
@@ -959,7 +984,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Día actual */}
             <div className={`${theme.card} border ${theme.border} rounded-[2rem] p-6 flex justify-between items-center ${theme.shadow} transition-colors duration-500`}>
               <div>
                 <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block mb-2`}>Enfoque de hoy</span>
@@ -1084,18 +1108,20 @@ export default function App() {
               </div>
             </div>
 
+            {/* REGISTRO INTELIGENTE DE COMIDA */}
             <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
               <span className={`text-[10px] ${theme.muted} font-bold block uppercase tracking-widest`}>Registro Inteligente</span>
               <form onSubmit={handleTextFoodSubmit} className="space-y-4">
                 <div className="relative">
-                  <input type="text" placeholder="Ej. Bowl de salmón y arroz..." value={textFoodInput} onChange={(e) => setTextFoodInput(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-3 pr-20 text-sm outline-none transition-colors font-medium`} />
+                  <input type="text" placeholder="Ej. Bowl de salmón y arroz..." value={textFoodInput} onChange={(e) => setTextFoodInput(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-3 pr-24 text-sm outline-none transition-colors font-medium`} />
                   <div className="absolute right-0 top-2 flex gap-2">
-                    <button type="button" onClick={handleToggleAudioRecording} className={`p-1.5 rounded-full transition-colors ${isRecordingAudio ? 'text-red-500 animate-pulse' : theme.muted}`}>🎙️</button>
-                    <button type="button" onClick={() => mealFileInputRef.current.click()} className={`p-1.5 ${theme.muted}`}>📷</button>
+                    <button type="button" onClick={handleToggleAudioRecording} title="Grabar audio" className={`p-1.5 rounded-full transition-colors ${isRecordingAudio ? 'text-red-500 animate-pulse' : theme.muted}`}>🎙️</button>
+                    <button type="button" onClick={() => mealCameraInputRef.current.click()} title="Tomar foto con cámara" className={`p-1.5 ${theme.muted} hover:text-white transition-colors`}>📷</button>
+                    <button type="button" onClick={() => mealFileInputRef.current.click()} title="Abrir Galería" className={`p-1.5 ${theme.muted} hover:text-white transition-colors`}>🖼️</button>
                   </div>
                 </div>
-                <button type="submit" disabled={isScanning || !textFoodInput.trim()} className={`w-full py-4 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${textFoodInput.trim() ? theme.primary : theme.secondary + ' opacity-50 cursor-not-allowed'}`}>
-                  {isScanning ? 'Analizando USDA...' : 'Procesar Comida'}
+                <button type="submit" disabled={isScanning} className={`w-full py-4 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${!isScanning ? theme.primary : theme.secondary + ' opacity-50 cursor-not-allowed'}`}>
+                  {isScanning ? 'Analizando...' : 'Procesar Comida'}
                 </button>
               </form>
             </div>
@@ -1654,7 +1680,6 @@ export default function App() {
       {showPaywallModal && !isPro && !isDeveloper && (
         <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-6 animate-fadeIn backdrop-blur-xl">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-8 shadow-2xl relative overflow-hidden`}>
-            
             <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
             <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
 
