@@ -286,6 +286,13 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
+  // Estado temporal para edición de perfil dentro del modal de Ajustes
+  const [editProfile, setEditProfile] = useState(userProfile);
+
+  useEffect(() => {
+    setEditProfile(userProfile);
+  }, [userProfile]);
+
   const [authStep, setAuthStep] = useState(userProfile ? 'app' : 'login');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginName, setLoginName] = useState('');
@@ -449,7 +456,6 @@ export default function App() {
     return true;
   };
 
-  // Redimensionar imágenes antes de enviar para evitar payload pesados
   const compressImageForAI = (file, maxWidth = 800) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -482,6 +488,15 @@ export default function App() {
     });
   };
 
+  // Guardar Cambios de Perfil desde Ajustes
+  const handleSaveProfileSettings = (e) => {
+    e.preventDefault();
+    localStorage.setItem('active_user_profile', JSON.stringify(editProfile));
+    setUserProfile(editProfile);
+    setShowSettingsModal(false);
+    alert('¡Perfil y objetivo actualizados correctamente!');
+  };
+
   // ================================================================
   //  FUNCIONES IA & GEMINI
   // ================================================================
@@ -490,7 +505,7 @@ export default function App() {
     setAuthStep('generating_routine');
     try {
       const prompt = `Actúa como un Head Coach especialista en hipertrofia basada en evidencia. 
-      Diseña una rutina Torso/Pierna (Upper/Lower) de 3 ejercicios por día para un usuario cuyo objetivo es: ${profileData.objetivo || 'Recomposición'}.
+      Diseña una rutina Torso/Pierna (Upper/Lower) de 3 ejercicios por día para un usuario cuyo objetivo es: ${profileData.objetivo || 'Recomposición'} y dispone de equipamiento: ${profileData.equipamiento || 'gimnasio'}.
       Devuelve SOLO un JSON estricto con esta estructura exacta:
       {
         "torso": [
@@ -648,10 +663,6 @@ export default function App() {
     }
   };
 
-  // ================================================================
-  //  FUNCIONES PARA EDITAR/MODIFICAR INGREDIENTES EN ESCANEO
-  // ================================================================
-  
   const handleFoodPropertyChange = (index, field, value) => {
     if (!scanResult) return;
     const updatedFoods = [...scanResult.foods];
@@ -768,10 +779,6 @@ export default function App() {
       setIsAnalyzingStrategy(false); 
     }
   };
-
-  // ================================================================
-  //  UTILIDADES
-  // ================================================================
 
   const processAndAlignImage = (sourceImage, targetWidth = 1080) => {
     const targetHeight = (targetWidth * 16) / 9;
@@ -898,7 +905,6 @@ export default function App() {
 
   const rootStyle = { fontFamily: "'Montserrat', sans-serif" };
 
-  // ========================== PANTALLA DE CARGA ==========================
   if (authStep === 'generating_routine') {
     return (
       <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col items-center justify-center p-6 transition-colors duration-500`}>
@@ -913,7 +919,6 @@ export default function App() {
     );
   }
 
-  // ========================== LOGIN ==========================
   if (authStep === 'login') {
     return (
       <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex items-center justify-center p-6 transition-colors duration-500`}>
@@ -940,7 +945,6 @@ export default function App() {
     );
   }
 
-  // ========================== ONBOARDING ==========================
   if (authStep === 'onboarding') return <Onboarding onComplete={(data) => {
     const fullProfile = { ...data, email: loginEmail, name: loginName || data.name };
     localStorage.setItem('active_user_profile', JSON.stringify(fullProfile));
@@ -958,7 +962,6 @@ export default function App() {
 
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
-      {/* Inputs Ocultos de Selección de Archivos / Cámara */}
       <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleMultipleFileUpload} />
       <input type="file" ref={mealFileInputRef} accept="image/*" className="hidden" onChange={handleMealImageUpload} />
       <input type="file" ref={mealCameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleMealImageUpload} />
@@ -1186,7 +1189,7 @@ export default function App() {
               </form>
             </div>
 
-            {/* TARJETA DE CONFIRMACIÓN DE LECTURA DE IA (EDITABLE COMPLETA) */}
+            {/* TARJETA DE CONFIRMACIÓN DE LECTURA DE IA */}
             {scanResult && (
               <div className={`${theme.card} border border-green-500/30 rounded-[2.5rem] p-6 space-y-6 animate-fadeIn shadow-2xl relative overflow-hidden`}>
                 <div className="flex items-start justify-between border-b border-white/10 pb-4">
@@ -1779,20 +1782,102 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL DE AJUSTES Y EDICIÓN DE PERFIL COMPLETO */}
       {showSettingsModal && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 shadow-2xl`}>
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
+          <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
             <div className={`flex justify-between items-center border-b ${theme.border} pb-4`}>
-              <h3 className="text-xl font-black">Ajustes</h3>
-              <button onClick={() => setShowSettingsModal(false)} className={`${theme.muted} font-bold text-xl`}>✕</button>
+              <h3 className="text-xl font-black">Configuración</h3>
+              <button onClick={() => setShowSettingsModal(false)} className={`${theme.muted} font-bold text-xl hover:text-white transition-colors`}>✕</button>
             </div>
-            <div className={`${theme.secondary} p-5 rounded-3xl border ${theme.border} space-y-3 text-xs`}>
-              <span className={`text-[10px] font-bold uppercase tracking-widest block mb-2`}>PERFIL</span>
-              <div className="flex justify-between"><span className={`${theme.muted} font-bold uppercase`}>Atleta:</span> <span className="font-bold">{userProfile.name}</span></div>
-              <div className="flex justify-between"><span className={`${theme.muted} font-bold uppercase`}>Email:</span> <span className="font-bold">{userProfile.email}</span></div>
-              <div className="flex justify-between"><span className={`${theme.muted} font-bold uppercase`}>Objetivo:</span> <span className="font-bold">{userProfile.objetivo || 'No definido'}</span></div>
+
+            {/* SECCIÓN SUSCRIPCIÓN EN EL MENÚ */}
+            <div className={`p-5 rounded-3xl border border-blue-500/30 bg-blue-500/10 space-y-3`}>
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-black text-blue-400 uppercase tracking-widest">Plan Actual</span>
+                <span className={`text-[10px] px-3 py-1 rounded-full font-bold uppercase ${isPro || isDeveloper ? 'bg-green-500 text-black' : 'bg-white/20 text-white'}`}>
+                  {isDeveloper ? 'DEV VIP' : isPro ? 'PRO VIP' : 'GRATUITO'}
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-300 leading-relaxed">
+                {isPro || isDeveloper ? 'Tienes acceso ilimitado a todas las herramientas avanzadas de IA.' : `Te quedan ${dailyCredits} tokens hoy. Suscríbete para acceso ilimitado.`}
+              </p>
+              {(!isPro && !isDeveloper) && (
+                <button onClick={() => { setShowSettingsModal(false); setShowPaywallModal(true); }} className={`w-full py-3 bg-white text-black font-black text-[10px] uppercase tracking-widest rounded-full hover:scale-105 transition-transform`}>
+                  ⭐ Obtener STUDIO PRO
+                </button>
+              )}
             </div>
-            <button onClick={() => { localStorage.removeItem('active_user_profile'); window.location.reload(); }} className="w-full py-4 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg">CERRAR SESIÓN</button>
+
+            {/* FORMULARIO PARA MODIFICAR PARÁMETROS DEL USUARIO */}
+            <form onSubmit={handleSaveProfileSettings} className="space-y-4">
+              <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block`}>Editar Objetivos y Datos</span>
+
+              <div>
+                <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-1`}>Nombre</label>
+                <input 
+                  type="text" 
+                  value={editProfile?.name || ''} 
+                  onChange={(e) => setEditProfile({ ...editProfile, name: e.target.value })}
+                  className={`w-full bg-transparent border-b ${theme.border} py-2 text-xs font-bold outline-none`}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-1`}>Peso (kg)</label>
+                  <input 
+                    type="number" step="0.1"
+                    value={editProfile?.peso || ''} 
+                    onChange={(e) => setEditProfile({ ...editProfile, peso: e.target.value })}
+                    className={`w-full bg-transparent border-b ${theme.border} py-2 text-xs font-bold outline-none`}
+                  />
+                </div>
+                <div>
+                  <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-1`}>Altura (cm)</label>
+                  <input 
+                    type="number" 
+                    value={editProfile?.altura || ''} 
+                    onChange={(e) => setEditProfile({ ...editProfile, altura: e.target.value })}
+                    className={`w-full bg-transparent border-b ${theme.border} py-2 text-xs font-bold outline-none`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-1`}>Objetivo Principal</label>
+                <select 
+                  value={editProfile?.objetivo || 'Recomposición'} 
+                  onChange={(e) => setEditProfile({ ...editProfile, objetivo: e.target.value })}
+                  className={`w-full bg-transparent border-b ${theme.border} py-2 text-xs font-bold outline-none`}
+                >
+                  <option value="Perder Grasa" className={isDark ? "bg-black" : "bg-white"}>🔥 Perder Grasa / Definición</option>
+                  <option value="Recomposición" className={isDark ? "bg-black" : "bg-white"}>⚖️ Recomposición Corporal</option>
+                  <option value="Ganar Músculo" className={isDark ? "bg-black" : "bg-white"}>💪 Ganar Músculo / Volumen</option>
+                </select>
+              </div>
+
+              <div>
+                <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-1`}>Equipamiento Disponible</label>
+                <select 
+                  value={editProfile?.equipamiento || 'gimnasio'} 
+                  onChange={(e) => setEditProfile({ ...editProfile, equipamiento: e.target.value })}
+                  className={`w-full bg-transparent border-b ${theme.border} py-2 text-xs font-bold outline-none`}
+                >
+                  <option value="gimnasio" className={isDark ? "bg-black" : "bg-white"}>🏋️ Gimnasio Completo</option>
+                  <option value="mancuernas" className={isDark ? "bg-black" : "bg-white"}>🏠 Mancuernas y Banco en casa</option>
+                  <option value="calistenia" className={isDark ? "bg-black" : "bg-white"}>🤸 Calistenia / Peso Corporal</option>
+                </select>
+              </div>
+
+              <button type="submit" className={`w-full py-3.5 ${theme.primary} text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg mt-2`}>
+                Guardar Ajustes
+              </button>
+            </form>
+
+            <button onClick={() => { localStorage.removeItem('active_user_profile'); window.location.reload(); }} className="w-full py-3 bg-red-600/20 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-red-600 hover:text-white transition-colors">
+              Cerrar Sesión
+            </button>
           </div>
         </div>
       )}
@@ -1816,9 +1901,9 @@ export default function App() {
             </p>
             
             <div className={`space-y-4 relative z-10`}>
-              <div className="flex items-center gap-3 text-sm font-medium"><span className="text-blue-500 text-lg">✓</span> Rutinas IA ilimitadas</div>
+              <div className="flex items-center gap-3 text-sm font-medium"><span className="text-blue-500 text-lg">✓</span> Rutinas IA ilimitadas y adaptadas a tu material</div>
               <div className="flex items-center gap-3 text-sm font-medium"><span className="text-blue-500 text-lg">✓</span> Recetas del Chef IA ilimitadas</div>
-              <div className="flex items-center gap-3 text-sm font-medium"><span className="text-blue-500 text-lg">✓</span> Análisis clínico avanzado</div>
+              <div className="flex items-center gap-3 text-sm font-medium"><span className="text-blue-500 text-lg">✓</span> Análisis clínico avanzado de progreso</div>
             </div>
 
             <div className="relative z-10 space-y-3">
