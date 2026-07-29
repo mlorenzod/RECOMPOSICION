@@ -272,9 +272,9 @@ export default function App() {
   const theme = {
     bg: isDark ? 'bg-[#050505]' : 'bg-[#F9F9F9]',
     card: isDark ? 'bg-[#111111]' : 'bg-white',
-    border: isDark ? 'border-white/10' : 'border-black/5',
+    border: isDark ? 'border-white/10' : 'border-black/10',
     text: isDark ? 'text-white' : 'text-black',
-    muted: isDark ? 'text-gray-500' : 'text-gray-400',
+    muted: isDark ? 'text-gray-500' : 'text-gray-500',
     primary: isDark ? 'bg-white text-black' : 'bg-black text-white',
     secondary: isDark ? 'bg-[#222] text-white' : 'bg-gray-100 text-black',
     navBg: isDark ? 'bg-[#050505]/95' : 'bg-[#F9F9F9]/95',
@@ -308,9 +308,7 @@ export default function App() {
     return now;
   });
 
-  // ============================================================
-  // LOGICA OPCION B: PRUEBA GRATUITA DE 7 DIAS (FREE TRIAL)
-  // ============================================================
+  // LOGICA PRUEBA GRATUITA DE 7 DIAS
   const [trialStartDate] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_trial_start_date`);
     if (saved) return new Date(saved);
@@ -575,7 +573,6 @@ export default function App() {
       
       const scanData = JSON.parse(jsonMatch[0]);
 
-      // Asegurar campos por defecto para la recarga dinámica
       const formattedFoods = scanData.foods.map(f => ({
         ...f,
         unitType: f.unitType || 'g',
@@ -706,14 +703,14 @@ export default function App() {
     if (currentFood.unitType !== newUnit) {
       currentFood.unitType = newUnit;
       if (newUnit === 'ud') {
-        currentFood.grams = 1; // 1 Unidad por defecto
+        currentFood.grams = 1; 
         currentFood.unitWeight = currentFood.unitWeight || 60;
         currentFood.baseCalPerUnit = currentFood.cal;
         currentFood.baseProtPerUnit = currentFood.prot;
         currentFood.baseCarbsPerUnit = currentFood.carbs;
         currentFood.baseFatPerUnit = currentFood.fat;
       } else {
-        currentFood.grams = 100; // 100g por defecto
+        currentFood.grams = 100; 
         currentFood.baseCalPerUnit = currentFood.cal / 100;
         currentFood.baseProtPerUnit = currentFood.prot / 100;
         currentFood.baseCarbsPerUnit = currentFood.carbs / 100;
@@ -1248,38 +1245,38 @@ export default function App() {
               </form>
             </div>
 
-            {/* TARJETA DE CONFIRMACIÓN DE LECTURA DE IA (CON BARRAS SELECTORAS DINÁMICAS Y UNIDADES) */}
+            {/* TARJETA DE CONFIRMACIÓN CON DISEÑO LIMPIO Y BARRAS SLIDER HIGH-CONTRAST */}
             {scanResult && (
-              <div className={`${theme.card} border border-green-500/30 rounded-[2.5rem] p-6 space-y-6 animate-fadeIn shadow-2xl relative overflow-hidden`}>
-                <div className="flex items-start justify-between border-b border-white/10 pb-4">
+              <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-6 space-y-6 animate-fadeIn ${theme.shadow} relative overflow-hidden`}>
+                <div className={`flex items-start justify-between border-b ${theme.border} pb-4`}>
                   <div className="flex-1 pr-4">
-                    <span className="text-[9px] font-bold text-green-400 uppercase tracking-widest block mb-1">✅ Detección completada</span>
+                    <span className={`text-[10px] font-bold ${isDark ? 'text-green-400' : 'text-emerald-700'} uppercase tracking-widest block mb-1`}>✦ Detección completada</span>
                     <input 
                       type="text" 
                       value={scanResult.dishName} 
                       onChange={(e) => setScanResult({ ...scanResult, dishName: e.target.value })}
-                      className="text-xl font-black leading-tight bg-transparent border-b border-white/20 outline-none w-full focus:border-green-400"
+                      className={`text-xl font-black leading-tight bg-transparent border-b ${theme.border} ${theme.text} outline-none w-full focus:border-white`}
                     />
                   </div>
                   <span className="text-2xl">🥗</span>
                 </div>
 
                 {scanResult.img && (
-                  <div className="relative w-full h-40 rounded-2xl overflow-hidden border border-white/10">
+                  <div className={`relative w-full h-40 rounded-2xl overflow-hidden border ${theme.border}`}>
                     <img src={scanResult.img} alt="Vista del plato" className="w-full h-full object-cover" />
                   </div>
                 )}
 
                 {scanResult.goalFeedback && (
-                  <div className="p-3.5 bg-green-500/10 border border-green-500/20 rounded-2xl text-xs text-green-400 font-medium italic">
+                  <div className={`p-4 ${isDark ? 'bg-emerald-950/30 border-emerald-800/30 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-900'} border rounded-2xl text-xs font-medium italic`}>
                     "{scanResult.goalFeedback}"
                   </div>
                 )}
 
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <span className={`text-[9px] ${theme.muted} font-bold uppercase tracking-widest`}>Ajustar Cantidades con Barra</span>
-                    <button onClick={handleAddFoodItem} className="text-[10px] font-bold text-green-400 hover:underline flex items-center gap-1">
+                    <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest`}>Ajustar Cantidades con Barra</span>
+                    <button onClick={handleAddFoodItem} className={`text-[10px] font-bold ${theme.text} hover:opacity-70 flex items-center gap-1 transition-opacity`}>
                       <span>+</span> Añadir ingrediente
                     </button>
                   </div>
@@ -1296,48 +1293,42 @@ export default function App() {
                             type="text" 
                             value={f.name} 
                             onChange={(e) => handleFoodNameChange(i, e.target.value)}
-                            className="font-bold text-sm bg-transparent border-b border-transparent hover:border-white/20 focus:border-white outline-none flex-1"
+                            className={`font-bold text-sm bg-transparent border-b ${theme.border} ${theme.text} outline-none flex-1`}
                           />
                           
                           {/* SELECTOR GRAMOS / UNIDADES */}
-                          <div className="flex bg-black/40 rounded-xl p-1 border border-white/10 text-[9px] font-bold">
+                          <div className={`flex ${theme.card} rounded-xl p-1 border ${theme.border} text-[9px] font-bold`}>
                             <button 
                               type="button"
                               onClick={() => handleUnitTypeToggle(i, 'g')}
-                              className={`px-2.5 py-1 rounded-lg transition-all ${!isUnits ? 'bg-white text-black' : 'text-gray-400'}`}
+                              className={`px-2.5 py-1 rounded-lg transition-all ${!isUnits ? theme.primary : theme.muted}`}
                             >
                               Gramos
                             </button>
                             <button 
                               type="button"
                               onClick={() => handleUnitTypeToggle(i, 'ud')}
-                              className={`px-2.5 py-1 rounded-lg transition-all ${isUnits ? 'bg-white text-black' : 'text-gray-400'}`}
+                              className={`px-2.5 py-1 rounded-lg transition-all ${isUnits ? theme.primary : theme.muted}`}
                             >
                               Unidades
                             </button>
                           </div>
 
-                          <button onClick={() => handleRemoveFoodItem(i)} title="Eliminar ingrediente" className="text-gray-500 hover:text-red-400 text-xs p-1">
+                          <button onClick={() => handleRemoveFoodItem(i)} title="Eliminar ingrediente" className={`${theme.muted} hover:text-red-500 text-xs p-1 transition-colors`}>
                             🗑️
                           </button>
                         </div>
 
-                        {/* CONTROLES Y BARRA SELECTORA */}
+                        {/* CONTROLES Y BARRA SLIDER INTUITIVA */}
                         <div className="space-y-2 pt-1">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cantidad:</span>
-                            <div className="flex items-center gap-1 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
-                              <input 
-                                type="number" 
-                                value={f.grams} 
-                                onChange={(e) => handleFoodQuantityChange(i, e.target.value)}
-                                className="w-12 bg-transparent text-right font-black text-xs outline-none text-green-400"
-                              />
-                              <span className="text-xs font-bold text-green-400">{isUnits ? 'ud' : 'g'}</span>
+                            <span className={`text-[10px] font-bold ${theme.muted} uppercase tracking-widest`}>Cantidad:</span>
+                            <div className={`${theme.card} border ${theme.border} px-3 py-1 rounded-xl text-xs font-black ${theme.text}`}>
+                              {f.grams} {isUnits ? 'ud' : 'g'}
                             </div>
                           </div>
 
-                          {/* BARRA SLIDER INTUITIVA */}
+                          {/* BARRA SLIDER HIGH-CONTRAST */}
                           <input 
                             type="range" 
                             min={isUnits ? "0.5" : "5"} 
@@ -1345,11 +1336,11 @@ export default function App() {
                             step={stepVal}
                             value={f.grams} 
                             onChange={(e) => handleFoodQuantityChange(i, e.target.value)}
-                            className="w-full accent-green-400 h-1.5 bg-black/50 rounded-lg appearance-none cursor-pointer"
+                            className={`w-full h-2 rounded-lg cursor-pointer ${isDark ? 'accent-white bg-gray-800' : 'accent-black bg-gray-200'}`}
                           />
                         </div>
 
-                        <div className={`font-semibold ${theme.muted} uppercase tracking-wider text-[9px] flex justify-between pt-1 border-t border-white/5`}>
+                        <div className={`font-semibold ${theme.muted} uppercase tracking-wider text-[9px] flex justify-between pt-2 border-t ${theme.border}`}>
                           <span>🔥 {f.cal} kcal</span>
                           <span>🥩 {f.prot}g P</span>
                           <span>🍞 {f.carbs}g C</span>
@@ -1364,7 +1355,7 @@ export default function App() {
                   <button onClick={handleConfirmScan} className={`flex-1 py-4 ${theme.primary} font-black rounded-full text-[10px] uppercase tracking-widest shadow-lg hover:scale-[1.02] transition-transform`}>
                     Añadir a mis Macros
                   </button>
-                  <button onClick={() => setScanResult(null)} className={`px-5 py-4 bg-transparent border ${theme.border} text-gray-400 font-black rounded-full text-[10px] uppercase tracking-widest hover:text-white transition-colors`}>
+                  <button onClick={() => setScanResult(null)} className={`px-5 py-4 bg-transparent border ${theme.border} ${theme.muted} font-black rounded-full text-[10px] uppercase tracking-widest hover:${theme.text} transition-colors`}>
                     Descartar
                   </button>
                 </div>
