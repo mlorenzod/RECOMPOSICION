@@ -449,7 +449,7 @@ export default function App() {
     return true;
   };
 
-  // Función para optimizar y redimensionar imágenes antes de enviarlas a la IA
+  // Redimensionar imágenes antes de enviar para evitar payload pesados
   const compressImageForAI = (file, maxWidth = 800) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -483,7 +483,7 @@ export default function App() {
   };
 
   // ================================================================
-  //  FUNCIONES IA & GEMINI (Misma estructura usada en Recetas)
+  //  FUNCIONES IA & GEMINI
   // ================================================================
 
   const generateInitialRoutine = async (profileData) => {
@@ -573,7 +573,7 @@ export default function App() {
       setUserXP(prev => prev + 50);
     } catch (error) {
       console.error("Error procesando la comida:", error);
-      alert("No se pudo procesar la lectura. Inténtalo de nuevo con otra imagen o texto.");
+      alert("No se pudo procesar la lectura. Inténtalo de nuevo.");
     } finally {
       setIsScanning(false);
     }
@@ -643,9 +643,47 @@ export default function App() {
         setIsRecordingAudio(true);
       } catch (err) { 
         console.error("Error al acceder al micrófono:", err);
-        alert("No se pudo acceder al micrófono. Por favor comprueba los permisos del navegador."); 
+        alert("No se pudo acceder al micrófono."); 
       }
     }
+  };
+
+  // ================================================================
+  //  FUNCIONES PARA EDITAR/MODIFICAR INGREDIENTES EN ESCANEO
+  // ================================================================
+  
+  const handleFoodPropertyChange = (index, field, value) => {
+    if (!scanResult) return;
+    const updatedFoods = [...scanResult.foods];
+    const currentFood = { ...updatedFoods[index] };
+
+    if (field === 'grams') {
+      const newGrams = Math.max(0, parseFloat(value) || 0);
+      const ratio = currentFood.grams > 0 ? newGrams / currentFood.grams : 1;
+      
+      currentFood.grams = newGrams;
+      currentFood.cal = Math.round(currentFood.cal * ratio);
+      currentFood.prot = Math.round(currentFood.prot * ratio);
+      currentFood.carbs = Math.round(currentFood.carbs * ratio);
+      currentFood.fat = Math.round(currentFood.fat * ratio);
+    } else {
+      currentFood[field] = value;
+    }
+
+    updatedFoods[index] = currentFood;
+    setScanResult({ ...scanResult, foods: updatedFoods });
+  };
+
+  const handleRemoveFoodItem = (index) => {
+    if (!scanResult) return;
+    const updatedFoods = scanResult.foods.filter((_, i) => i !== index);
+    setScanResult({ ...scanResult, foods: updatedFoods });
+  };
+
+  const handleAddFoodItem = () => {
+    if (!scanResult) return;
+    const newItem = { name: "Nuevo ingrediente", grams: 100, cal: 150, prot: 10, carbs: 15, fat: 5 };
+    setScanResult({ ...scanResult, foods: [...scanResult.foods, newItem] });
   };
 
   const generatePersonalizedRecipe = async () => {
@@ -1148,13 +1186,18 @@ export default function App() {
               </form>
             </div>
 
-            {/* TARJETA DE CONFIRMACIÓN DE LECTURA DE IA (AMABLE Y CLARA) */}
+            {/* TARJETA DE CONFIRMACIÓN DE LECTURA DE IA (EDITABLE COMPLETA) */}
             {scanResult && (
               <div className={`${theme.card} border border-green-500/30 rounded-[2.5rem] p-6 space-y-6 animate-fadeIn shadow-2xl relative overflow-hidden`}>
                 <div className="flex items-start justify-between border-b border-white/10 pb-4">
-                  <div>
+                  <div className="flex-1 pr-4">
                     <span className="text-[9px] font-bold text-green-400 uppercase tracking-widest block mb-1">✅ Detección completada</span>
-                    <h3 className="text-xl font-black leading-tight">{scanResult.dishName}</h3>
+                    <input 
+                      type="text" 
+                      value={scanResult.dishName} 
+                      onChange={(e) => setScanResult({ ...scanResult, dishName: e.target.value })}
+                      className="text-xl font-black leading-tight bg-transparent border-b border-white/20 outline-none w-full focus:border-green-400"
+                    />
                   </div>
                   <span className="text-2xl">🥗</span>
                 </div>
@@ -1172,17 +1215,44 @@ export default function App() {
                 )}
 
                 <div className="space-y-3">
-                  <span className={`text-[9px] ${theme.muted} font-bold uppercase tracking-widest block`}>Ingredientes e información nutricional</span>
+                  <div className="flex justify-between items-center">
+                    <span className={`text-[9px] ${theme.muted} font-bold uppercase tracking-widest`}>Ajustar Ingredientes y Cantidades</span>
+                    <button onClick={handleAddFoodItem} className="text-[10px] font-bold text-green-400 hover:underline flex items-center gap-1">
+                      <span>+</span> Añadir ingrediente
+                    </button>
+                  </div>
+
                   {scanResult.foods.map((f, i) => (
-                    <div key={i} className={`flex justify-between items-center text-xs ${theme.secondary} p-3.5 rounded-2xl border ${theme.border}`}>
-                      <div>
-                        <span className="font-bold block text-sm">{f.name}</span>
-                        <span className={`text-[10px] ${theme.muted} font-semibold uppercase tracking-wider`}>
-                          🔥 {f.cal} kcal · 🥩 {f.prot}g prot · 🍞 {f.carbs}g carbs · 🥑 {f.fat}g fat
-                        </span>
+                    <div key={i} className={`space-y-2 ${theme.secondary} p-3.5 rounded-2xl border ${theme.border}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <input 
+                          type="text" 
+                          value={f.name} 
+                          onChange={(e) => handleFoodPropertyChange(i, 'name', e.target.value)}
+                          className="font-bold text-sm bg-transparent border-b border-transparent hover:border-white/20 focus:border-white outline-none flex-1"
+                        />
+                        <button onClick={() => handleRemoveFoodItem(i)} title="Eliminar ingrediente" className="text-gray-500 hover:text-red-400 text-xs p-1">
+                          🗑️
+                        </button>
                       </div>
-                      <div className="font-bold text-xs bg-white/10 px-3 py-1.5 rounded-xl border border-white/10">
-                        {f.grams}g
+
+                      <div className="flex items-center justify-between pt-1 text-[10px] gap-2">
+                        <div className="flex items-center gap-1 bg-black/30 px-3 py-1.5 rounded-xl border border-white/10">
+                          <input 
+                            type="number" 
+                            value={f.grams} 
+                            onChange={(e) => handleFoodPropertyChange(i, 'grams', e.target.value)}
+                            className="w-12 bg-transparent text-right font-black text-xs outline-none text-green-400"
+                          />
+                          <span className={theme.muted}>g</span>
+                        </div>
+                        
+                        <div className={`font-semibold ${theme.muted} uppercase tracking-wider text-[9px] flex gap-2`}>
+                          <span>🔥 {f.cal} kcal</span>
+                          <span>🥩 {f.prot}g P</span>
+                          <span>🍞 {f.carbs}g C</span>
+                          <span>🥑 {f.fat}g F</span>
+                        </div>
                       </div>
                     </div>
                   ))}
