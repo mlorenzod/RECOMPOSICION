@@ -387,6 +387,9 @@ export default function App() {
   const [strategyReport, setStrategyReport] = useState(null);
   const [showStrategyModal, setShowStrategyModal] = useState(false);
 
+  // ESTADO PARA MOSTRAR O OCULTAR GRÁFICO DE DISTRIBUCIÓN POR INGREDIENTE
+  const [showMacroBreakdownChart, setShowMacroBreakdownChart] = useState(false);
+
   const targetMacros = calculateScienceMacros(userProfile);
   const currentMacros = dailyNutritionLogs[selectedDay] || { cal: 0, protein: 0, carbs: 0, fat: 0 };
   const calPercentage = Math.min(100, Math.round((currentMacros.cal / targetMacros.cal) * 100));
@@ -671,7 +674,7 @@ export default function App() {
   };
 
   // ================================================================
-  // BARRAS SELECTORAS DINÁMICAS (UNIDADES O GRAMOS CON RECÁLCULO)
+  // BARRAS SELECTORAS DINÁMICAS (UNIDADES O GRAMOS CON RECÁLCULO A TIEMPO REAL)
   // ================================================================
   const handleFoodQuantityChange = (index, newQuantity) => {
     if (!scanResult) return;
@@ -1016,6 +1019,10 @@ export default function App() {
   const currentWorldIndex = Math.floor((selectedDay - 1) / 10);
   const currentWorldObj = MARIO_WORLDS[currentWorldIndex] || MARIO_WORLDS[0];
 
+  // CÁLCULOS DINÁMICOS DE TOTALES Y PORCENTAJES DEL PLATOS
+  const scanTotalCal = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.cal || 0), 0) : 0;
+  const scanTotalProt = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.prot || 0), 0) : 0;
+
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
       <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleMultipleFileUpload} />
@@ -1273,6 +1280,38 @@ export default function App() {
                   </div>
                 )}
 
+                {/* BOTÓN PARA ABRIR GRÁFICO DE PORCENTAJES/DISTRIBUCIÓN DEL PLATOS */}
+                <button 
+                  type="button" 
+                  onClick={() => setShowMacroBreakdownChart(!showMacroBreakdownChart)}
+                  className={`w-full py-2.5 px-4 ${theme.secondary} border ${theme.border} rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-between hover:opacity-80 transition-opacity`}
+                >
+                  <span>📊 {showMacroBreakdownChart ? 'Ocultar Distribución' : 'Ver Distribución del Plato (%)'}</span>
+                  <span>{showMacroBreakdownChart ? '▲' : '▼'}</span>
+                </button>
+
+                {/* PANEL DESPLEGABLE CON PORCENTAJES Y MACROS A TIEMPO REAL */}
+                {showMacroBreakdownChart && (
+                  <div className={`p-4 ${theme.secondary} rounded-2xl border ${theme.border} space-y-3 animate-fadeIn`}>
+                    <span className={`text-[9px] ${theme.muted} font-bold uppercase tracking-widest block border-b ${theme.border} pb-2`}>Aporte (%) por ingrediente al total del plato</span>
+                    {scanResult.foods.map((f, idx) => {
+                      const calPercent = scanTotalCal > 0 ? Math.round((f.cal / scanTotalCal) * 100) : 0;
+                      const protPercent = scanTotalProt > 0 ? Math.round((f.prot / scanTotalProt) * 100) : 0;
+                      return (
+                        <div key={idx} className="space-y-1.5 text-[10px]">
+                          <div className="flex justify-between font-bold">
+                            <span className="truncate max-w-[150px]">{f.name}</span>
+                            <span className={theme.muted}>{f.cal} kcal ({calPercent}%) · {f.prot}g Prot ({protPercent}%)</span>
+                          </div>
+                          <div className={`h-1.5 w-full ${isDark ? 'bg-gray-800' : 'bg-gray-200'} rounded-full overflow-hidden`}>
+                            <div className={`h-full ${isDark ? 'bg-white' : 'bg-black'} transition-all duration-300`} style={{ width: `${calPercent}%` }}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest`}>Ajustar Cantidades con Barra</span>
@@ -1340,7 +1379,8 @@ export default function App() {
                           />
                         </div>
 
-                        <div className={`font-semibold ${theme.muted} uppercase tracking-wider text-[9px] flex justify-between pt-2 border-t ${theme.border}`}>
+                        {/* VALORES DE MACROS A TIEMPO REAL */}
+                        <div className={`font-semibold ${theme.text} uppercase tracking-wider text-[9px] flex justify-between pt-2 border-t ${theme.border}`}>
                           <span>🔥 {f.cal} kcal</span>
                           <span>🥩 {f.prot}g P</span>
                           <span>🍞 {f.carbs}g C</span>
