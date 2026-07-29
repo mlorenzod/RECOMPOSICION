@@ -449,8 +449,41 @@ export default function App() {
     return true;
   };
 
+  // Función para optimizar y redimensionar imágenes antes de enviarlas a la IA
+  const compressImageForAI = (file, maxWidth = 800) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const base64Url = canvas.toDataURL('image/jpeg', 0.8);
+          const base64Data = base64Url.split(',')[1];
+          resolve({ base64Data, base64Url, mimeType: 'image/jpeg' });
+        };
+        img.onerror = reject;
+        img.src = event.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   // ================================================================
-  //  FUNCIONES IA & GEMINI
+  //  FUNCIONES IA & GEMINI (Misma estructura usada en Recetas)
   // ================================================================
 
   const generateInitialRoutine = async (profileData) => {
@@ -498,8 +531,8 @@ export default function App() {
     if (!useCredit()) return;
     setIsScanning(true);
     try {
-      const systemInstruction = `Analiza la siguiente comida. Devuelve SOLO un JSON estricto sin bloques markdown. Formato:
-      {"dishName": "Nombre del plato o alimento", "foods": [{"name": "Ingrediente o elemento", "grams": 150, "cal": 220, "prot": 25, "carbs": 20, "fat": 8}], "goalFeedback": "Un comentario breve, positivo y motivador sobre la comida (máximo 12 palabras)."}`;
+      const systemInstruction = `Analiza la siguiente comida. Devuelve SOLO un JSON estricto sin bloques markdown. Formato exacto:
+      {"dishName": "Nombre del plato", "foods": [{"name": "Ingrediente", "grams": 150, "cal": 220, "prot": 25, "carbs": 20, "fat": 8}], "goalFeedback": "Un comentario breve y motivador en máximo 12 palabras."}`;
 
       let parts = [];
       if (typeof promptContent === 'string') {
@@ -522,40 +555,47 @@ export default function App() {
           generationConfig: { responseMimeType: 'application/json' }
         })
       });
+
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Error en el backend');
 
-      const jsonMatch = data.text.match(/\{[\s\S]*\}/);
+      const rawText = data.text || (data.candidates && data.candidates[0]?.content?.parts[0]?.text) || '';
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('Formato de respuesta inválido');
       
       const scanData = JSON.parse(jsonMatch[0]);
       setScanResult({
         dishName: scanData.dishName,
-        img: (typeof promptContent === 'object' && promptContent.inlineData && promptContent.inlineData.mimeType.startsWith('image/')) ? `data:${promptContent.inlineData.mimeType};base64,${promptContent.inlineData.data}` : null,
+        img: promptContent.previewUrl || null,
         foods: scanData.foods,
         goalFeedback: scanData.goalFeedback
       });
       setUserXP(prev => prev + 50);
     } catch (error) {
       console.error("Error procesando la comida:", error);
-      alert("¡Vaya! No se pudo identificar correctamente la entrada. Inténtalo de nuevo.");
+      alert("No se pudo procesar la lectura. Inténtalo de nuevo con otra imagen o texto.");
     } finally {
       setIsScanning(false);
     }
   };
 
-  const handleMealImageUpload = (e) => {
+  const handleMealImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target.result.split(',')[1];
-      processFoodWithGemini({
-        inlineData: { mimeType: file.type || 'image/jpeg', data: base64 }
+    try {
+      setIsScanning(true);
+      const { base64Data, base64Url, mimeType } = await compressImageForAI(file);
+      await processFoodWithGemini({
+        inlineData: { mimeType, data: base64Data },
+        previewUrl: base64Url
       });
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+    } catch (err) {
+      console.error(err);
+      alert("Error al procesar la imagen seleccionada.");
+      setIsScanning(false);
+    } finally {
+      e.target.value = '';
+    }
   };
 
   const handleTextFoodSubmit = (e) => { 
@@ -1108,7 +1148,7 @@ export default function App() {
               </form>
             </div>
 
-            {/* TARJETA DE CONFIRMACIÓN DE LECTURA DE IA (NUTRITIVA Y AMABLE) */}
+            {/* TARJETA DE CONFIRMACIÓN DE LECTURA DE IA (AMABLE Y CLARA) */}
             {scanResult && (
               <div className={`${theme.card} border border-green-500/30 rounded-[2.5rem] p-6 space-y-6 animate-fadeIn shadow-2xl relative overflow-hidden`}>
                 <div className="flex items-start justify-between border-b border-white/10 pb-4">
