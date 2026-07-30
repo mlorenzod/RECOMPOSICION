@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Onboarding from './components/Onboarding';
 
 // DICCIONARIO DE IMÁGENES GASTRONÓMICAS DE ALTA CALIDAD
 const RECIPE_IMAGES_DB = {
@@ -20,7 +19,7 @@ const selectRecipeImage = (title = '', ingredients = []) => {
   return RECIPE_IMAGES_DB.default[Math.floor(Math.random() * RECIPE_IMAGES_DB.default.length)];
 };
 
-// LISTA DETALLADA DE EQUIPAMIENTO
+// LISTA DETALLADA DE EQUIPAMIENTO COMPARTIDA CON EL CUESTIONARIO INICIAL
 const AVAILABLE_EQUIPMENT_OPTIONS = [
   { id: 'mancuernas', label: 'Mancuernas' },
   { id: 'barra', label: 'Barra y Discos' },
@@ -32,6 +31,137 @@ const AVAILABLE_EQUIPMENT_OPTIONS = [
   { id: 'cuerda', label: 'Cuerda de Tríceps' },
   { id: 'calistenia', label: 'Peso Corporal' }
 ];
+
+// ========== COMPONENTE CUESTIONARIO INICIAL (ONBOARDING MEJORADO) ==========
+const OnboardingModal = ({ onComplete }) => {
+  const [formData, setEditForm] = useState({
+    peso: '75',
+    altura: '175',
+    edad: '28',
+    genero: 'hombre',
+    actividad: 'moderado',
+    objetivo: 'Recomposición',
+    equipamientoArray: ['mancuernas', 'banco']
+  });
+
+  const handleEquipmentToggle = (equipId) => {
+    const currentEquip = formData.equipamientoArray || [];
+    const exists = currentEquip.includes(equipId);
+    let updated = exists 
+      ? currentEquip.filter(item => item !== equipId) 
+      : [...currentEquip, equipId];
+    setEditForm({ ...formData, equipamientoArray: updated });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.equipamientoArray || formData.equipamientoArray.length === 0) {
+      return alert("Selecciona al menos un tipo de equipamiento disponible.");
+    }
+    onComplete(formData);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-50 flex items-center justify-center p-6 animate-fadeIn overflow-y-auto">
+      <div className="bg-[#111] border border-white/10 rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 shadow-2xl my-auto">
+        <div className="text-center space-y-2 border-b border-white/10 pb-4">
+          <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block">Evaluación Inicial</span>
+          <h2 className="text-2xl font-black text-white">Configura tu Perfil</h2>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] text-gray-400 font-bold uppercase block mb-1">Peso (kg)</label>
+              <input 
+                type="number" step="0.1" required 
+                value={formData.peso} 
+                onChange={(e) => setEditForm({ ...formData, peso: e.target.value })}
+                className="w-full bg-transparent border-b border-white/20 py-2 text-xs font-bold text-white outline-none focus:border-white"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-400 font-bold uppercase block mb-1">Altura (cm)</label>
+              <input 
+                type="number" required 
+                value={formData.altura} 
+                onChange={(e) => setEditForm({ ...formData, altura: e.target.value })}
+                className="w-full bg-transparent border-b border-white/20 py-2 text-xs font-bold text-white outline-none focus:border-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] text-gray-400 font-bold uppercase block mb-1">Edad</label>
+              <input 
+                type="number" required 
+                value={formData.edad} 
+                onChange={(e) => setEditForm({ ...formData, edad: e.target.value })}
+                className="w-full bg-transparent border-b border-white/20 py-2 text-xs font-bold text-white outline-none focus:border-white"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-400 font-bold uppercase block mb-1">Género</label>
+              <select 
+                value={formData.genero} 
+                onChange={(e) => setEditForm({ ...formData, genero: e.target.value })}
+                className="w-full bg-transparent border-b border-white/20 py-2 text-xs font-bold text-white outline-none bg-black"
+              >
+                <option value="hombre">Hombre</option>
+                <option value="mujer">Mujer</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] text-gray-400 font-bold uppercase block mb-1">Objetivo Principal</label>
+            <select 
+              value={formData.objetivo} 
+              onChange={(e) => setEditForm({ ...formData, objetivo: e.target.value })}
+              className="w-full bg-transparent border-b border-white/20 py-2 text-xs font-bold text-white outline-none bg-black"
+            >
+              <option value="Perder Grasa">Perder Grasa / Definición</option>
+              <option value="Recomposición">Recomposición Corporal</option>
+              <option value="Ganar Músculo">Ganar Músculo / Volumen</option>
+            </select>
+          </div>
+
+          {/* SELECTOR DE MATERIAL EN EL PRIMER CUESTIONARIO */}
+          <div>
+            <label className="text-[10px] text-gray-400 font-bold uppercase block mb-2">Equipamiento Disponible</label>
+            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+              {AVAILABLE_EQUIPMENT_OPTIONS.map((equip) => {
+                const selected = (formData.equipamientoArray || []).includes(equip.id);
+                return (
+                  <button
+                    key={equip.id}
+                    type="button"
+                    onClick={() => handleEquipmentToggle(equip.id)}
+                    className={`p-2.5 rounded-2xl border text-[10px] font-bold flex items-center justify-center transition-all ${
+                      selected 
+                        ? 'bg-white text-black border-white' 
+                        : 'bg-[#222] border-white/10 text-gray-400'
+                    }`}
+                  >
+                    <span className="truncate">{equip.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            className="w-full py-4 bg-white text-black font-black text-xs uppercase tracking-widest rounded-full shadow-lg hover:scale-105 transition-transform mt-4"
+          >
+            Comenzar Entrenamiento
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 // ========== LISTA DE EJERCICIOS COMPUESTOS ==========
 const COMPOUND_EXERCISES = {
@@ -230,7 +360,6 @@ const TROPHY_DEFINITIONS = {
   legend_60: { title: 'The Icon', desc: 'Finaliza los 60 días completos', icon: '✦' }
 };
 
-// CÁLCULO CIENTÍFICO DE MACROS DE REFERENCIA (MIFFLIN-ST JEOR)
 const calculateScienceMacros = (profile) => {
   if (!profile || !profile.peso || !profile.altura || !profile.edad) {
     return { cal: 2000, protein: 140, carbs: 200, fat: 60 };
@@ -410,7 +539,7 @@ export default function App() {
   // CAMARA TRASERA / FRONTAL PARA PROGRESO
   const [cameraFacingMode, setCameraFacingMode] = useState("environment");
 
-  // CÁLCULO DE MACROS OBJETIVO (PERMITIENDO EDICIÓN MANUAL DEL USUARIO O CÁLCULO CIENTÍFICO)
+  // CÁLCULO DINÁMICO DE MACROS OBJETIVO (SIEMPRE ACTUALIZADO)
   const baseTargetMacros = userProfile?.customMacros || calculateScienceMacros(userProfile);
   
   const isWeeklyView = nutritionViewMode === 'weekly';
@@ -455,7 +584,6 @@ export default function App() {
     }
   }, [bodyLogs, dailyNutritionLogs, logs, userXP, userPhotos, isPro, userKey, userProfile, workoutPlan, workouts]);
 
-  // Estados Seguimiento Visual y Métricas
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [showManagePhotosModal, setShowManagePhotosModal] = useState(false);
@@ -532,19 +660,28 @@ export default function App() {
     });
   };
 
+  // GUARDAR AJUSTES DE PERFIL CON RECÁLCULO INMEDIATO DE MACROS EN LA APP
+  const handleSaveProfileSettings = (e) => {
+    e.preventDefault();
+    const recalculated = {
+      ...editProfile,
+      customMacros: editProfile.customMacros || calculateScienceMacros(editProfile)
+    };
+    localStorage.setItem('active_user_profile', JSON.stringify(recalculated));
+    setUserProfile(recalculated);
+    setShowSettingsModal(false);
+    alert('¡Perfil, objetivos y macros recalculados correctamente!');
+  };
+
   const handleEquipmentToggle = (equipId) => {
     const currentEquip = editProfile?.equipamientoArray || ['mancuernas'];
     const exists = currentEquip.includes(equipId);
-    let updated = [];
-    if (exists) {
-      updated = currentEquip.filter(item => item !== equipId);
-    } else {
-      updated = [...currentEquip, equipId];
-    }
+    let updated = exists 
+      ? currentEquip.filter(item => item !== equipId) 
+      : [...currentEquip, equipId];
     setEditProfile({ ...editProfile, equipamientoArray: updated });
   };
 
-  // REEVALUAR / RECALCULAR CONTRADICCIONES TEÓRICAS AL CAMBIAR AJUSTES
   const checkMacroContradictions = (profile) => {
     if (!profile) return null;
     const science = calculateScienceMacros(profile);
@@ -1042,7 +1179,6 @@ export default function App() {
     e.target.value = '';
   };
 
-  // MANEJO DE CÁMARA CON CAMBIO DE LENTE (FRONTAL / TRASERA)
   const startCamera = async () => {
     setShowCameraModal(true);
     setTimeout(async () => {
@@ -1181,7 +1317,7 @@ export default function App() {
     );
   }
 
-  if (authStep === 'onboarding') return <Onboarding onComplete={(data) => {
+  if (authStep === 'onboarding') return <OnboardingModal onComplete={(data) => {
     const fullProfile = { ...data, email: loginEmail, name: loginName || data.name };
     localStorage.setItem('active_user_profile', JSON.stringify(fullProfile));
     setUserProfile(fullProfile); 
@@ -1199,7 +1335,9 @@ export default function App() {
   const scanTotalCal = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.cal || 0), 0) : 0;
   const scanTotalProt = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.prot || 0), 0) : 0;
 
-  const macroContradictionWarning = checkMacroContradictions(editProfile);
+  const protDiff = targetMacros.protein - currentMacros.protein;
+  const carbsDiff = targetMacros.carbs - currentMacros.carbs;
+  const fatDiff = targetMacros.fat - currentMacros.fat;
 
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
@@ -1414,7 +1552,6 @@ export default function App() {
                   <h2 className="text-xl font-black">Balance de Macros</h2>
                 </div>
                 
-                {/* SELECTOR VISTA DIARIA VS SEMANAL Y RESET */}
                 <div className="flex items-center gap-3">
                   <div className={`flex ${theme.secondary} border ${theme.border} rounded-full p-1 text-[9px] font-bold uppercase tracking-widest`}>
                     <button 
@@ -1452,7 +1589,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* DESGLOSE DETALLADO DE CADA MACRO */}
                 <div className="space-y-4 flex-1 text-[10px] font-bold">
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
@@ -1723,7 +1859,7 @@ export default function App() {
               </div>
             )}
 
-            {/* CHEF IA Y BOTÓN GENERAR IA REDISEÑADO */}
+            {/* CHEF IA */}
             <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
               <div className={`flex justify-between items-center border-b ${theme.border} pb-4`}>
                 <div>
@@ -2005,7 +2141,7 @@ export default function App() {
       {showCameraModal && (
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between p-6 animate-fadeIn overflow-y-auto">
           <div className="w-full max-w-sm flex justify-between items-center py-2">
-            <span className="text-[10px] text-white font-bold uppercase tracking-widest">ENQUADRE 9:16</span>
+            <span className="text-[10px] text-white font-bold uppercase tracking-widest">ENCUADRE 9:16</span>
             <div className="flex gap-2 items-center">
               <button onClick={toggleCameraLens} className="text-xs bg-white/20 text-white px-3 py-1.5 rounded-full font-bold uppercase tracking-wider hover:bg-white/40 transition-colors">
                 📷 {cameraFacingMode === 'environment' ? 'Trasera' : 'Frontal'}
@@ -2020,19 +2156,13 @@ export default function App() {
             {/* OVERLAY ANATÓMICO SILUETA HUMANA MEJORADO */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-4 transition-opacity" style={{ opacity: overlayOpacity }}>
               <svg viewBox="0 0 100 200" className="w-full h-full stroke-white/80 fill-none" strokeWidth="0.8" strokeDasharray="2 1">
-                {/* Cabeza */}
                 <ellipse cx="50" cy="24" rx="8" ry="10" />
-                {/* Cuello */}
                 <path d="M 46 34 L 54 34 M 47 34 L 47 38 M 53 38 L 53 34" />
-                {/* Hombros y Torso */}
                 <path d="M 32 44 C 32 38, 68 38, 68 44 L 62 90 L 38 90 Z" />
-                {/* Brazos */}
                 <path d="M 31 44 C 26 60, 25 80, 26 105" />
                 <path d="M 69 44 C 74 60, 75 80, 74 105" />
-                {/* Cadera y Piernas */}
                 <path d="M 38 90 C 35 120, 36 150, 42 185" />
                 <path d="M 62 90 C 65 120, 64 150, 58 185" />
-                {/* Guía Central y Altura */}
                 <line x1="50" y1="10" x2="50" y2="190" stroke="rgba(255,255,255,0.25)" strokeWidth="0.5" strokeDasharray="1 1" />
                 <line x1="15" y1="90" x2="85" y2="90" stroke="rgba(255,255,255,0.25)" strokeWidth="0.5" strokeDasharray="1 1" />
               </svg>
@@ -2264,7 +2394,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE AJUSTES Y CONFIGURACIÓN DE OBJETIVOS E EDICIÓN INTERACTIVA DE MACROS */}
+      {/* MODAL DE AJUSTES Y CONFIGURACIÓN CON ASESOR INTERACTIVO DE MACROS */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -2295,7 +2425,7 @@ export default function App() {
             </div>
 
             <form onSubmit={handleSaveProfileSettings} className="space-y-4">
-              <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block`}>Editar Objetivos y Biometría</span>
+              <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block`}>Editar Objetivos y Datos</span>
 
               <div>
                 <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-1`}>Nombre</label>
@@ -2356,7 +2486,7 @@ export default function App() {
                 </select>
               </div>
 
-              {/* SECCIÓN INTERACTIVA DE AJUSTE PERSONALIZADO DE MACROS */}
+              {/* SECCIÓN INTERACTIVA CON ASESOR DE MACROS Y ADVERTENCIA TEÓRICA */}
               <div className={`p-4 ${theme.secondary} rounded-2xl border ${theme.border} space-y-3`}>
                 <div className="flex justify-between items-center border-b border-white/10 pb-2">
                   <span className="text-[10px] font-bold uppercase tracking-widest">Ajuste de Metas Diarias</span>
@@ -2403,7 +2533,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SELECTOR MÚLTIPLE DE MATERIAL DE ENTRENO */}
+              {/* SELECTOR MÚLTIPLE DE MATERIAL */}
               <div>
                 <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-2`}>Equipamiento Disponible</label>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
@@ -2432,7 +2562,7 @@ export default function App() {
               </button>
             </form>
 
-            {/* BOTÓN REINICIAR DE 0 DE FORMA SEGURA */}
+            {/* BOTÓN REINICIAR DE 0 */}
             <button 
               type="button"
               onClick={() => {
