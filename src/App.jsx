@@ -20,7 +20,7 @@ const selectRecipeImage = (title = '', ingredients = []) => {
   return RECIPE_IMAGES_DB.default[Math.floor(Math.random() * RECIPE_IMAGES_DB.default.length)];
 };
 
-// LISTA DETALLADA DE EQUIPAMIENTO (ESTILO UNIFICADO SIN ICONOS MEZCLADOS)
+// LISTA DETALLADA DE EQUIPAMIENTO
 const AVAILABLE_EQUIPMENT_OPTIONS = [
   { id: 'mancuernas', label: 'Mancuernas' },
   { id: 'barra', label: 'Barra y Discos' },
@@ -404,6 +404,7 @@ export default function App() {
   const [showStrategyModal, setShowStrategyModal] = useState(false);
 
   // ESTADOS DE NUTRICIÓN
+  const [nutritionViewMode, setNutritionViewMode] = useState('daily'); // 'daily' o 'weekly'
   const [showMacroBreakdownChart, setShowMacroBreakdownChart] = useState(false);
   const [showCustomIngredientForm, setShowCustomIngredientForm] = useState(false);
   const [newIngredientName, setNewIngredientName] = useState('');
@@ -414,9 +415,38 @@ export default function App() {
   // ESTADO REEMPLAZAR EJERCICIO CON IA
   const [replacingExerciseId, setReplacingExerciseId] = useState(null);
 
-  const targetMacros = calculateScienceMacros(userProfile);
-  const currentMacros = dailyNutritionLogs[selectedDay] || { cal: 0, protein: 0, carbs: 0, fat: 0 };
+  const baseTargetMacros = calculateScienceMacros(userProfile);
+  
+  // METAS SEGÚN VISTA (DIARIA O SEMANAL)
+  const isWeeklyView = nutritionViewMode === 'weekly';
+  const targetMacros = isWeeklyView ? {
+    cal: baseTargetMacros.cal * 7,
+    protein: baseTargetMacros.protein * 7,
+    carbs: baseTargetMacros.carbs * 7,
+    fat: baseTargetMacros.fat * 7,
+  } : baseTargetMacros;
+
+  // CÁLCULO DE CONSUMO DE LOS ÚLTIMOS 7 DÍAS EN VISTA SEMANAL
+  const calculateWeeklyNutrition = () => {
+    let cal = 0, protein = 0, carbs = 0, fat = 0;
+    const startDay = Math.max(1, selectedDay - 6);
+    for (let d = startDay; d <= selectedDay; d++) {
+      const log = dailyNutritionLogs[d] || { cal: 0, protein: 0, carbs: 0, fat: 0 };
+      cal += log.cal;
+      protein += log.protein;
+      carbs += log.carbs;
+      fat += log.fat;
+    }
+    return { cal, protein, carbs, fat };
+  };
+
+  const currentMacros = isWeeklyView 
+    ? calculateWeeklyNutrition() 
+    : (dailyNutritionLogs[selectedDay] || { cal: 0, protein: 0, carbs: 0, fat: 0 });
+
   const calPercentage = Math.min(100, Math.round((currentMacros.cal / targetMacros.cal) * 100));
+  const isCalorieSurplus = currentMacros.cal > targetMacros.cal;
+  const calorieExcessVal = Math.max(0, currentMacros.cal - targetMacros.cal);
 
   useEffect(() => {
     if (userProfile) {
@@ -528,7 +558,6 @@ export default function App() {
     setEditProfile({ ...editProfile, equipamientoArray: updated });
   };
 
-  // REEMPLAZAR UN EJERCICIO POR OTRO CON IA
   const replaceExerciseWithAI = async (exercise) => {
     if (!verifyAccessOrShowPaywall()) return;
     setReplacingExerciseId(exercise.id);
@@ -583,10 +612,6 @@ export default function App() {
       setReplacingExerciseId(null);
     }
   };
-
-  // ================================================================
-  //  FUNCIONES IA & GEMINI
-  // ================================================================
 
   const generateInitialRoutine = async (profileData) => {
     setAuthStep('generating_routine');
@@ -1152,13 +1177,6 @@ export default function App() {
   const currentWorldIndex = Math.floor((selectedDay - 1) / 10);
   const currentWorldObj = MARIO_WORLDS[currentWorldIndex] || MARIO_WORLDS[0];
 
-  const scanTotalCal = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.cal || 0), 0) : 0;
-  const scanTotalProt = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.prot || 0), 0) : 0;
-
-  const protDiff = targetMacros.protein - currentMacros.protein;
-  const carbsDiff = targetMacros.carbs - currentMacros.carbs;
-  const fatDiff = targetMacros.fat - currentMacros.fat;
-
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
       <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleMultipleFileUpload} />
@@ -1185,12 +1203,39 @@ export default function App() {
         </div>
       </header>
 
-      {/* TABS NAVEGACIÓN */}
-      <nav className={`${theme.bg} border-b ${theme.border} px-4 pt-4 pb-0 transition-colors duration-500`}>
-        <div className="flex gap-4 max-w-md mx-auto overflow-x-auto scrollbar-none">
-          <button onClick={() => setActiveTab('entreno')} className={`flex-shrink-0 pb-3 font-bold text-xs uppercase tracking-widest transition-all border-b-2 ${activeTab === 'entreno' ? `${theme.text} ${isDark ? 'border-white' : 'border-black'}` : `${theme.muted} border-transparent`}`}>Entreno</button>
-          <button onClick={() => setActiveTab('nutricion')} className={`flex-shrink-0 pb-3 font-bold text-xs uppercase tracking-widest transition-all border-b-2 ${activeTab === 'nutricion' ? `${theme.text} ${isDark ? 'border-white' : 'border-black'}` : `${theme.muted} border-transparent`}`}>Nutrición</button>
-          <button onClick={() => setActiveTab('seguimiento')} className={`flex-shrink-0 pb-3 font-bold text-xs uppercase tracking-widest transition-all border-b-2 ${activeTab === 'seguimiento' ? `${theme.text} ${isDark ? 'border-white' : 'border-black'}` : `${theme.muted} border-transparent`}`}>Progreso</button>
+      {/* TABS NAVEGACIÓN CON DISEÑO NEOMÓRFICO / PILDO MÁS ATRACTIVO */}
+      <nav className={`${theme.bg} border-b ${theme.border} px-4 py-3 transition-colors duration-500`}>
+        <div className="flex gap-2 max-w-md mx-auto p-1.5 bg-[#151515] border border-white/10 rounded-full shadow-inner">
+          <button 
+            onClick={() => setActiveTab('entreno')} 
+            className={`flex-1 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-full ${
+              activeTab === 'entreno' 
+                ? 'bg-white text-black shadow-lg scale-[1.02]' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Entreno
+          </button>
+          <button 
+            onClick={() => setActiveTab('nutricion')} 
+            className={`flex-1 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-full ${
+              activeTab === 'nutricion' 
+                ? 'bg-white text-black shadow-lg scale-[1.02]' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Nutrición
+          </button>
+          <button 
+            onClick={() => setActiveTab('seguimiento')} 
+            className={`flex-1 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-full ${
+              activeTab === 'seguimiento' 
+                ? 'bg-white text-black shadow-lg scale-[1.02]' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Progreso
+          </button>
         </div>
       </nav>
 
@@ -1310,7 +1355,7 @@ export default function App() {
                       )}
 
                       <div className="flex gap-2">
-                        <button onClick={() => handleLogSet(ex.id, 20, 5)} className={`flex-1 py-4 ${theme.primary} font-black rounded-full text-[10px] uppercase tracking-widest`}>
+                        <button onClick={() => handleLogSet(ex.id, 20, 5)} className={`flex-1 py-4 ${theme.primary} font-black rounded-full text-[10px] uppercase tracking-widest shadow-md hover:scale-105 transition-transform`}>
                           Añadir Set
                         </button>
                         <button 
@@ -1334,33 +1379,56 @@ export default function App() {
           </div>
         )}
 
-        {/* ======================= MÓDULO NUTRICIÓN ======================= */}
+        {/* ======================= MÓDULO NUTRICIÓN (BALANCE CON ALERTA DE EXCESO Y VISTA SEMANAL) ======================= */}
         {activeTab === 'nutricion' && (
           <div className="space-y-8 animate-fadeIn">
             
-            <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-8 relative overflow-hidden ${theme.shadow} transition-colors duration-500`}>
+            <div className={`${theme.card} border ${isCalorieSurplus ? 'border-red-500/50 shadow-red-500/10' : theme.border} rounded-[2.5rem] p-8 space-y-8 relative overflow-hidden ${theme.shadow} transition-all duration-500`}>
               <div className="flex justify-between items-center">
                 <div>
                   <span className={`text-[10px] ${theme.muted} font-bold tracking-widest block uppercase mb-1`}>Ciencia Nutricional</span>
                   <h2 className="text-xl font-black">Balance de Macros</h2>
                 </div>
-                {currentMacros.cal > 0 && (
-                  <button onClick={() => { if(window.confirm('¿Reiniciar macros?')) setDailyNutritionLogs(prev => ({...prev, [selectedDay]: {cal:0, protein:0, carbs:0, fat:0}})) }} className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest underline`}>Reset</button>
-                )}
+                
+                {/* SELECTOR VISTA DIARIA VS SEMANAL Y RESET */}
+                <div className="flex items-center gap-3">
+                  <div className={`flex ${theme.secondary} border ${theme.border} rounded-full p-1 text-[9px] font-bold uppercase tracking-widest`}>
+                    <button 
+                      onClick={() => setNutritionViewMode('daily')}
+                      className={`px-3 py-1 rounded-full transition-all ${nutritionViewMode === 'daily' ? theme.primary : theme.muted}`}
+                    >
+                      Diario
+                    </button>
+                    <button 
+                      onClick={() => setNutritionViewMode('weekly')}
+                      className={`px-3 py-1 rounded-full transition-all ${nutritionViewMode === 'weekly' ? theme.primary : theme.muted}`}
+                    >
+                      Semanal
+                    </button>
+                  </div>
+
+                  {currentMacros.cal > 0 && (
+                    <button onClick={() => { if(window.confirm('¿Reiniciar macros?')) setDailyNutritionLogs(prev => ({...prev, [selectedDay]: {cal:0, protein:0, carbs:0, fat:0}})) }} className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest underline`}>Reset</button>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center gap-6">
                 <div className="relative w-32 h-32 flex items-center justify-center flex-shrink-0">
                   <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                     <path className={isDark ? "text-[#222]" : "text-gray-200"} strokeWidth="2.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                    <path className={`${isDark ? "text-white" : "text-black"} transition-all duration-1000`} strokeDasharray={`${calPercentage}, 100`} strokeWidth="2.5" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <path className={`${isCalorieSurplus ? "text-red-500" : isDark ? "text-white" : "text-black"} transition-all duration-1000`} strokeDasharray={`${calPercentage}, 100`} strokeWidth="2.5" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                   </svg>
                   <div className="absolute text-center flex flex-col items-center">
-                    <span className="text-3xl font-black leading-none">{currentMacros.cal}</span>
+                    <span className={`text-3xl font-black leading-none ${isCalorieSurplus ? 'text-red-500' : theme.text}`}>{currentMacros.cal}</span>
                     <span className={`text-[9px] ${theme.muted} font-bold mt-2 uppercase tracking-widest`}>/ {targetMacros.cal} kcal</span>
+                    {isCalorieSurplus && (
+                      <span className="text-[8px] font-bold text-red-500 mt-1 uppercase tracking-widest animate-pulse">Exceso: +{calorieExcessVal}</span>
+                    )}
                   </div>
                 </div>
 
+                {/* DESGLOSE DETALLADO DE CADA MACRO CON COLORES Y GRAMOS RESTANTES */}
                 <div className="space-y-4 flex-1 text-[10px] font-bold">
                   
                   {/* PROTEÍNAS */}
@@ -1409,7 +1477,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* REGISTRO INTELIGENTE DE COMIDA */}
+            {/* REGISTRO INTELIGENTE DE COMIDA Y BOTÓN PROCESAR REDISEÑADO */}
             <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
               <span className={`text-[10px] ${theme.muted} font-bold block uppercase tracking-widest`}>Registro Inteligente</span>
               <form onSubmit={handleTextFoodSubmit} className="space-y-4">
@@ -1421,7 +1489,17 @@ export default function App() {
                     <button type="button" onClick={() => mealFileInputRef.current.click()} title="Elegir foto de la galería" className={`p-1.5 ${theme.muted} hover:text-white transition-colors`}>🖼️</button>
                   </div>
                 </div>
-                <button type="submit" disabled={isScanning} className={`w-full py-4 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${!isScanning ? theme.primary : theme.secondary + ' opacity-50 cursor-not-allowed'}`}>
+                
+                {/* BOTÓN PROCESAR REDISEÑADO Y ELEVADO */}
+                <button 
+                  type="submit" 
+                  disabled={isScanning} 
+                  className={`w-full py-4.5 rounded-full font-black text-[11px] uppercase tracking-widest transition-all duration-300 shadow-xl border ${
+                    !isScanning 
+                      ? `${theme.primary} hover:scale-[1.02] border-transparent active:scale-95` 
+                      : `${theme.secondary} border-white/10 opacity-50 cursor-not-allowed`
+                  }`}
+                >
                   {isScanning ? 'Analizando con IA...' : 'Procesar Comida'}
                 </button>
               </form>
@@ -1458,7 +1536,7 @@ export default function App() {
                 <button 
                   type="button" 
                   onClick={() => setShowMacroBreakdownChart(!showMacroBreakdownChart)}
-                  className={`w-full py-2.5 px-4 ${theme.secondary} border ${theme.border} rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-between hover:opacity-80 transition-opacity`}
+                  className={`w-full py-3 px-4 ${theme.secondary} border ${theme.border} rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-between hover:opacity-80 transition-opacity`}
                 >
                   <span>📊 {showMacroBreakdownChart ? 'Ocultar Distribución' : 'Ver Distribución del Plato (%)'}</span>
                   <span>{showMacroBreakdownChart ? '▲' : '▼'}</span>
@@ -1627,14 +1705,24 @@ export default function App() {
               </div>
             )}
 
-            {/* CHEF IA */}
+            {/* CHEF IA Y BOTÓN GENERAR IA REDISEÑADO */}
             <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
               <div className={`flex justify-between items-center border-b ${theme.border} pb-4`}>
                 <div>
                   <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block mb-1`}>Culinary AI</span>
                   <h2 className="text-xl font-black">Tu Plato Ideal</h2>
                 </div>
-                <button onClick={generatePersonalizedRecipe} disabled={isGeneratingRecipe} className={`px-5 py-3 rounded-full text-[10px] font-black uppercase tracking-widest ${theme.secondary} border ${theme.border} hover:scale-105 transition-transform`}>
+                
+                {/* BOTÓN GENERAR IA REDISEÑADO Y DESTACADO */}
+                <button 
+                  onClick={generatePersonalizedRecipe} 
+                  disabled={isGeneratingRecipe} 
+                  className={`px-6 py-3.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 shadow-md ${
+                    !isGeneratingRecipe 
+                      ? `${theme.primary} hover:scale-105 active:scale-95` 
+                      : `${theme.secondary} opacity-50 cursor-not-allowed`
+                  }`}
+                >
                   {isGeneratingRecipe ? 'Diseñando...' : 'Generar IA ✨'}
                 </button>
               </div>
@@ -2137,7 +2225,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE AJUSTES Y CONFIGURACIÓN (SELECTOR MÚLTIPLE DE MATERIAL UNIFICADO) */}
+      {/* MODAL DE AJUSTES Y CONFIGURACIÓN */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -2215,7 +2303,7 @@ export default function App() {
                 </select>
               </div>
 
-              {/* SELECTOR GRANULAR DE EQUIPAMIENTO SIN ICONOS MEZCLADOS */}
+              {/* SELECTOR MÚLTIPLE DE MATERIAL DE ENTRENO */}
               <div>
                 <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-2`}>Equipamiento Disponible</label>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
