@@ -19,7 +19,6 @@ const selectRecipeImage = (title = '', ingredients = []) => {
   return RECIPE_IMAGES_DB.default[Math.floor(Math.random() * RECIPE_IMAGES_DB.default.length)];
 };
 
-// LISTA DETALLADA DE EQUIPAMIENTO
 const AVAILABLE_EQUIPMENT_OPTIONS = [
   { id: 'mancuernas', label: 'Mancuernas' },
   { id: 'barra', label: 'Barra y Discos' },
@@ -32,7 +31,6 @@ const AVAILABLE_EQUIPMENT_OPTIONS = [
   { id: 'calistenia', label: 'Peso Corporal' }
 ];
 
-// CUESTIONARIO INICIAL (ONBOARDING)
 const OnboardingModal = ({ onComplete }) => {
   const [formData, setEditForm] = useState({
     peso: '75',
@@ -162,7 +160,6 @@ const OnboardingModal = ({ onComplete }) => {
   );
 };
 
-// LISTA DE EJERCICIOS COMPUESTOS
 const COMPOUND_EXERCISES = {
   squat: { name: 'Sentadilla', target: 'Pierna', img: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=600&q=80' },
   bench: { name: 'Press Banca', target: 'Pecho', img: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=80' },
@@ -423,7 +420,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  // ESTADO DE CONFIGURACIÓN SEGURO Y PROTEGIDO CONTRA NULL
   const [editProfile, setEditProfile] = useState(() => ({
     name: userProfile?.name || 'Atleta',
     peso: userProfile?.peso || '75',
@@ -431,7 +427,7 @@ export default function App() {
     edad: userProfile?.edad || '28',
     genero: userProfile?.genero || 'hombre',
     objetivo: userProfile?.objetivo || 'Recomposición',
-    equipamientoArray: userProfile?.equipamientoArray || ['mancuernas', 'banco'],
+    equipamientoArray: Array.isArray(userProfile?.equipamientoArray) ? userProfile.equipamientoArray : ['mancuernas', 'banco'],
     customMacros: userProfile?.customMacros || null
   }));
 
@@ -698,7 +694,7 @@ export default function App() {
   };
 
   const handleEquipmentToggle = (equipId) => {
-    const currentEquip = editProfile?.equipamientoArray || ['mancuernas'];
+    const currentEquip = Array.isArray(editProfile?.equipamientoArray) ? editProfile.equipamientoArray : ['mancuernas'];
     const exists = currentEquip.includes(equipId);
     let updated = exists 
       ? currentEquip.filter(item => item !== equipId) 
@@ -1363,6 +1359,10 @@ export default function App() {
   const scanTotalCal = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.cal || 0), 0) : 0;
   const scanTotalProt = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.prot || 0), 0) : 0;
 
+  const protDiff = targetMacros.protein - currentMacros.protein;
+  const carbsDiff = targetMacros.carbs - currentMacros.carbs;
+  const fatDiff = targetMacros.fat - currentMacros.fat;
+
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
       <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleMultipleFileUpload} />
@@ -1623,7 +1623,7 @@ export default function App() {
                       <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.protein / targetMacros.protein) * 100)}%` }}></div>
                     </div>
                     <div className="text-[8px] text-right font-semibold">
-                      {protDiff > 0 ? <span className="text-emerald-500">Quedan {protDiff}g</span> : <span className="text-gray-400">Meta cumplida</span>}
+                      {targetMacros.protein - currentMacros.protein > 0 ? <span className="text-emerald-500">Quedan {targetMacros.protein - currentMacros.protein}g</span> : <span className="text-gray-400">Meta cumplida</span>}
                     </div>
                   </div>
 
@@ -1636,7 +1636,7 @@ export default function App() {
                       <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.carbs / targetMacros.carbs) * 100)}%` }}></div>
                     </div>
                     <div className="text-[8px] text-right font-semibold">
-                      {carbsDiff > 0 ? <span className="text-blue-500">Quedan {carbsDiff}g</span> : <span className="text-gray-400">Meta cumplida</span>}
+                      {targetMacros.carbs - currentMacros.carbs > 0 ? <span className="text-blue-500">Quedan {targetMacros.carbs - currentMacros.carbs}g</span> : <span className="text-gray-400">Meta cumplida</span>}
                     </div>
                   </div>
 
@@ -1649,7 +1649,7 @@ export default function App() {
                       <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.fat / targetMacros.fat) * 100)}%` }}></div>
                     </div>
                     <div className="text-[8px] text-right font-semibold">
-                      {fatDiff > 0 ? <span className="text-amber-500">Quedan {fatDiff}g</span> : <span className="text-gray-400">Meta cumplida</span>}
+                      {targetMacros.fat - currentMacros.fat > 0 ? <span className="text-amber-500">Quedan {targetMacros.fat - currentMacros.fat}g</span> : <span className="text-gray-400">Meta cumplida</span>}
                     </div>
                   </div>
                 </div>
@@ -1683,7 +1683,7 @@ export default function App() {
               </form>
             </div>
 
-            {/* TARJETA DE CONFIRMACIÓN */}
+            {/* TARJETA DE CONFIRMACIÓN CON SLIDERS Y UNIDADES */}
             {scanResult && (
               <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-6 space-y-6 animate-fadeIn ${theme.shadow} relative overflow-hidden`}>
                 <div className={`flex items-start justify-between border-b ${theme.border} pb-4`}>
@@ -2119,7 +2119,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* FORMULARIO DE MEDIDAS FÍSICAS CORREGIDO */}
+            {/* FORMULARIO DE MEDIDAS FÍSICAS */}
             <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
               <span className={`text-[10px] ${theme.muted} font-bold tracking-widest block uppercase border-b ${theme.border} pb-4`}>Registrar Evolución del Día {selectedDay}</span>
               <div className="space-y-5">
@@ -2160,7 +2160,7 @@ export default function App() {
         </div>
       </footer>
 
-      {/* MODAL CÁMARA NATIIVA CON PROPORCIÓN DE ENCUADRE 3:4 */}
+      {/* MODAL CÁMARA CON ENCUADRE 3:4 */}
       {showCameraModal && (
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between p-6 animate-fadeIn overflow-y-auto">
           <div className="w-full max-w-sm flex justify-between items-center py-2">
@@ -2416,7 +2416,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE CONFIGURACIÓN REPARADO CONTRA BLOQUEOS DE RENDERIZADO */}
+      {/* MODAL CONFIGURACIÓN CON PROTECCIÓN CONTRA FALLOS NULOS */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -2508,7 +2508,6 @@ export default function App() {
                 </select>
               </div>
 
-              {/* SECCIÓN INTERACTIVA DE MACROS */}
               <div className={`p-4 ${theme.secondary} rounded-2xl border ${theme.border} space-y-3`}>
                 <div className="flex justify-between items-center border-b border-white/10 pb-2">
                   <span className="text-[10px] font-bold uppercase tracking-widest">Ajuste de Metas Diarias</span>
@@ -2555,7 +2554,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SELECTOR MÚLTIPLE DE MATERIAL DE ENTRENO */}
               <div>
                 <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-2`}>Equipamiento Disponible</label>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
