@@ -230,6 +230,7 @@ const TROPHY_DEFINITIONS = {
   legend_60: { title: 'The Icon', desc: 'Finaliza los 60 días completos', icon: '✦' }
 };
 
+// CÁLCULO CIENTÍFICO DE MACROS DE REFERENCIA (MIFFLIN-ST JEOR)
 const calculateScienceMacros = (profile) => {
   if (!profile || !profile.peso || !profile.altura || !profile.edad) {
     return { cal: 2000, protein: 140, carbs: 200, fat: 60 };
@@ -242,9 +243,7 @@ const calculateScienceMacros = (profile) => {
   let bmr = (10 * peso) + (6.25 * altura) - (5 * edad);
   bmr += (profile.genero === 'mujer' || profile.genero === 'femenino') ? -161 : 5;
 
-  const activityMultipliers = {
-    sedentario: 1.2, ligero: 1.375, moderado: 1.55, intenso: 1.725
-  };
+  const activityMultipliers = { sedentario: 1.2, ligero: 1.375, moderado: 1.55, intenso: 1.725 };
   const actKey = profile.actividad ? profile.actividad.toLowerCase() : 'moderado';
   const tdee = bmr * (activityMultipliers[actKey] || 1.375);
 
@@ -408,7 +407,11 @@ export default function App() {
   // ESTADO REEMPLAZAR EJERCICIO CON IA
   const [replacingExerciseId, setReplacingExerciseId] = useState(null);
 
-  const baseTargetMacros = calculateScienceMacros(userProfile);
+  // CAMARA TRASERA / FRONTAL PARA PROGRESO
+  const [cameraFacingMode, setCameraFacingMode] = useState("environment");
+
+  // CÁLCULO DE MACROS OBJETIVO (PERMITIENDO EDICIÓN MANUAL DEL USUARIO O CÁLCULO CIENTÍFICO)
+  const baseTargetMacros = userProfile?.customMacros || calculateScienceMacros(userProfile);
   
   const isWeeklyView = nutritionViewMode === 'weekly';
   const targetMacros = isWeeklyView ? {
@@ -529,14 +532,6 @@ export default function App() {
     });
   };
 
-  const handleSaveProfileSettings = (e) => {
-    e.preventDefault();
-    localStorage.setItem('active_user_profile', JSON.stringify(editProfile));
-    setUserProfile(editProfile);
-    setShowSettingsModal(false);
-    alert('¡Perfil y equipamiento actualizados!');
-  };
-
   const handleEquipmentToggle = (equipId) => {
     const currentEquip = editProfile?.equipamientoArray || ['mancuernas'];
     const exists = currentEquip.includes(equipId);
@@ -547,6 +542,27 @@ export default function App() {
       updated = [...currentEquip, equipId];
     }
     setEditProfile({ ...editProfile, equipamientoArray: updated });
+  };
+
+  // REEVALUAR / RECALCULAR CONTRADICCIONES TEÓRICAS AL CAMBIAR AJUSTES
+  const checkMacroContradictions = (profile) => {
+    if (!profile) return null;
+    const science = calculateScienceMacros(profile);
+    const custom = profile.customMacros || science;
+    const obj = (profile.objetivo || '').toLowerCase();
+
+    if (obj.includes('ganar') && custom.cal < science.cal - 100) {
+      return "⚠️ Contradicción detectada: Has seleccionado 'Ganar Músculo', pero tus calorías fijadas están por debajo de tu gasto calórico diario. Para ganar masa muscular eficientemente se suele recomendar un ligero superávit calórico (Mifflin-St Jeor). Puedes mantener tu cifra si sigues un protocolo personalizado.";
+    }
+    if (obj.includes('perder') && custom.cal > science.cal + 100) {
+      return "⚠️ Contradicción detectada: Has seleccionado 'Perder Grasa', pero tus calorías objetivo superan tu tasa metabólica recomendada en déficit. Puedes ajustar libremente la cifra según tu criterio o fuente nutricional.";
+    }
+    return null;
+  };
+
+  const handleRecalculateMacrosClick = () => {
+    const science = calculateScienceMacros(editProfile);
+    setEditProfile({ ...editProfile, customMacros: science });
   };
 
   const replaceExerciseWithAI = async (exercise) => {
@@ -1026,17 +1042,29 @@ export default function App() {
     e.target.value = '';
   };
 
+  // MANEJO DE CÁMARA CON CAMBIO DE LENTE (FRONTAL / TRASERA)
   const startCamera = async () => {
     setShowCameraModal(true);
     setTimeout(async () => {
       try { 
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", aspectRatio: 9/16 } }); 
+        if (videoRef.current?.srcObject) {
+          videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cameraFacingMode, aspectRatio: 9/16 } }); 
         if (videoRef.current) videoRef.current.srcObject = stream; 
       } catch (err) { 
-        alert("No se pudo acceder a la cámara."); 
+        alert("No se pudo acceder a la cámara seleccionada."); 
         setShowCameraModal(false); 
       }
     }, 300);
+  };
+
+  const toggleCameraLens = () => {
+    const nextMode = cameraFacingMode === "environment" ? "user" : "environment";
+    setCameraFacingMode(nextMode);
+    if (showCameraModal) {
+      setTimeout(() => startCamera(), 100);
+    }
   };
 
   const stopCamera = () => { 
@@ -1171,9 +1199,7 @@ export default function App() {
   const scanTotalCal = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.cal || 0), 0) : 0;
   const scanTotalProt = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.prot || 0), 0) : 0;
 
-  const protDiff = targetMacros.protein - currentMacros.protein;
-  const carbsDiff = targetMacros.carbs - currentMacros.carbs;
-  const fatDiff = targetMacros.fat - currentMacros.fat;
+  const macroContradictionWarning = checkMacroContradictions(editProfile);
 
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
@@ -1201,7 +1227,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* TABS NAVEGACIÓN CON DISEÑO NEOMÓRFICO / PILDO MÁS ATRACTIVO */}
+      {/* TABS NAVEGACIÓN */}
       <nav className={`${theme.bg} border-b ${theme.border} px-4 py-3 transition-colors duration-500`}>
         <div className="flex gap-2 max-w-md mx-auto p-1.5 bg-[#151515] border border-white/10 rounded-full shadow-inner">
           <button 
@@ -1377,7 +1403,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ======================= MÓDULO NUTRICIÓN (BALANCE CON ALERTA DE EXCESO Y VISTA SEMANAL) ======================= */}
+        {/* ======================= MÓDULO NUTRICIÓN ======================= */}
         {activeTab === 'nutricion' && (
           <div className="space-y-8 animate-fadeIn">
             
@@ -1426,10 +1452,8 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* DESGLOSE DETALLADO DE CADA MACRO CON COLORES Y GRAMOS RESTANTES */}
+                {/* DESGLOSE DETALLADO DE CADA MACRO */}
                 <div className="space-y-4 flex-1 text-[10px] font-bold">
-                  
-                  {/* PROTEÍNAS */}
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
                       <span className="text-emerald-500 font-extrabold uppercase">Prot</span>
@@ -1439,11 +1463,10 @@ export default function App() {
                       <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.protein / targetMacros.protein) * 100)}%` }}></div>
                     </div>
                     <div className="text-[8px] text-right font-semibold">
-                      {protDiff > 0 ? <span className="text-emerald-500">Quedan {protDiff}g</span> : <span className="text-gray-400">Meta cumplida</span>}
+                      {targetMacros.protein - currentMacros.protein > 0 ? <span className="text-emerald-500">Quedan {targetMacros.protein - currentMacros.protein}g</span> : <span className="text-gray-400">Meta cumplida</span>}
                     </div>
                   </div>
 
-                  {/* CARBOHIDRATOS */}
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
                       <span className="text-blue-500 font-extrabold uppercase">Carbs</span>
@@ -1453,11 +1476,10 @@ export default function App() {
                       <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.carbs / targetMacros.carbs) * 100)}%` }}></div>
                     </div>
                     <div className="text-[8px] text-right font-semibold">
-                      {carbsDiff > 0 ? <span className="text-blue-500">Quedan {carbsDiff}g</span> : <span className="text-gray-400">Meta cumplida</span>}
+                      {targetMacros.carbs - currentMacros.carbs > 0 ? <span className="text-blue-500">Quedan {targetMacros.carbs - currentMacros.carbs}g</span> : <span className="text-gray-400">Meta cumplida</span>}
                     </div>
                   </div>
 
-                  {/* GRASAS */}
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
                       <span className="text-amber-500 font-extrabold uppercase">Fats</span>
@@ -1467,15 +1489,14 @@ export default function App() {
                       <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.fat / targetMacros.fat) * 100)}%` }}></div>
                     </div>
                     <div className="text-[8px] text-right font-semibold">
-                      {fatDiff > 0 ? <span className="text-amber-500">Quedan {fatDiff}g</span> : <span className="text-gray-400">Meta cumplida</span>}
+                      {targetMacros.fat - currentMacros.fat > 0 ? <span className="text-amber-500">Quedan {targetMacros.fat - currentMacros.fat}g</span> : <span className="text-gray-400">Meta cumplida</span>}
                     </div>
                   </div>
-
                 </div>
               </div>
             </div>
 
-            {/* REGISTRO INTELIGENTE DE COMIDA Y BOTÓN PROCESAR REDISEÑADO */}
+            {/* REGISTRO INTELIGENTE */}
             <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
               <span className={`text-[10px] ${theme.muted} font-bold block uppercase tracking-widest`}>Registro Inteligente</span>
               <form onSubmit={handleTextFoodSubmit} className="space-y-4">
@@ -1488,7 +1509,6 @@ export default function App() {
                   </div>
                 </div>
                 
-                {/* BOTÓN PROCESAR REDISEÑADO Y ELEVADO */}
                 <button 
                   type="submit" 
                   disabled={isScanning} 
@@ -1711,7 +1731,6 @@ export default function App() {
                   <h2 className="text-xl font-black">Tu Plato Ideal</h2>
                 </div>
                 
-                {/* BOTÓN GENERAR IA REDISEÑADO Y DESTACADO */}
                 <button 
                   onClick={generatePersonalizedRecipe} 
                   disabled={isGeneratingRecipe} 
@@ -1982,30 +2001,52 @@ export default function App() {
 
       {/* ===================== MODALES ===================== */}
       
+      {/* MODAL CÁMARA CON OVERLAY ANATÓMICO SILUETA HUMANA Y CAMBIO DE CÁMARA */}
       {showCameraModal && (
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between p-6 animate-fadeIn overflow-y-auto">
           <div className="w-full max-w-sm flex justify-between items-center py-2">
-            <span className="text-[10px] text-white font-bold uppercase tracking-widest">CÁMARA 9:16</span>
-            <button onClick={stopCamera} className="text-gray-500 font-bold text-xl p-2 hover:text-white transition-colors">✕</button>
+            <span className="text-[10px] text-white font-bold uppercase tracking-widest">ENQUADRE 9:16</span>
+            <div className="flex gap-2 items-center">
+              <button onClick={toggleCameraLens} className="text-xs bg-white/20 text-white px-3 py-1.5 rounded-full font-bold uppercase tracking-wider hover:bg-white/40 transition-colors">
+                📷 {cameraFacingMode === 'environment' ? 'Trasera' : 'Frontal'}
+              </button>
+              <button onClick={stopCamera} className="text-gray-500 font-bold text-xl p-2 hover:text-white transition-colors">✕</button>
+            </div>
           </div>
+
           <div className="relative w-full max-w-sm aspect-[9/16] bg-black rounded-[2rem] overflow-hidden border border-white/20 flex items-center justify-center my-auto shadow-2xl">
             <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            
+            {/* OVERLAY ANATÓMICO SILUETA HUMANA MEJORADO */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-4 transition-opacity" style={{ opacity: overlayOpacity }}>
-              <svg viewBox="0 0 100 200" className="w-full h-full stroke-white/80 fill-none" strokeWidth="1" strokeDasharray="2 1">
-                <circle cx="50" cy="22" r="8" />
-                <path d="M 40 38 L 60 38 M 42 75 L 58 75 M 45 95 L 55 95" />
-                <line x1="20" y1="22" x2="80" y2="22" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
-                <line x1="20" y1="75" x2="80" y2="75" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
+              <svg viewBox="0 0 100 200" className="w-full h-full stroke-white/80 fill-none" strokeWidth="0.8" strokeDasharray="2 1">
+                {/* Cabeza */}
+                <ellipse cx="50" cy="24" rx="8" ry="10" />
+                {/* Cuello */}
+                <path d="M 46 34 L 54 34 M 47 34 L 47 38 M 53 38 L 53 34" />
+                {/* Hombros y Torso */}
+                <path d="M 32 44 C 32 38, 68 38, 68 44 L 62 90 L 38 90 Z" />
+                {/* Brazos */}
+                <path d="M 31 44 C 26 60, 25 80, 26 105" />
+                <path d="M 69 44 C 74 60, 75 80, 74 105" />
+                {/* Cadera y Piernas */}
+                <path d="M 38 90 C 35 120, 36 150, 42 185" />
+                <path d="M 62 90 C 65 120, 64 150, 58 185" />
+                {/* Guía Central y Altura */}
+                <line x1="50" y1="10" x2="50" y2="190" stroke="rgba(255,255,255,0.25)" strokeWidth="0.5" strokeDasharray="1 1" />
+                <line x1="15" y1="90" x2="85" y2="90" stroke="rgba(255,255,255,0.25)" strokeWidth="0.5" strokeDasharray="1 1" />
               </svg>
             </div>
           </div>
+
           <div className="w-full max-w-sm space-y-2 py-4">
             <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-              <span>Opacidad Guía:</span><span className="text-white">{Math.round(overlayOpacity * 100)}%</span>
+              <span>Opacidad Silueta:</span><span className="text-white">{Math.round(overlayOpacity * 100)}%</span>
             </div>
             <input type="range" min="0.1" max="1" step="0.1" value={overlayOpacity} onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))} className="w-full accent-white" />
           </div>
-          <button onClick={capturePhoto} className="w-full max-w-sm py-4 bg-white text-black font-black rounded-full text-[10px] uppercase tracking-widest shadow-lg mb-4">
+
+          <button onClick={capturePhoto} className="w-full max-w-sm py-4 bg-white text-black font-black rounded-full text-[10px] uppercase tracking-widest shadow-lg mb-4 hover:scale-105 transition-transform">
             DISPARAR FOTO
           </button>
         </div>
@@ -2223,7 +2264,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE AJUSTES Y CONFIGURACIÓN */}
+      {/* MODAL DE AJUSTES Y CONFIGURACIÓN DE OBJETIVOS E EDICIÓN INTERACTIVA DE MACROS */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -2254,7 +2295,7 @@ export default function App() {
             </div>
 
             <form onSubmit={handleSaveProfileSettings} className="space-y-4">
-              <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block`}>Editar Objetivos y Datos</span>
+              <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block`}>Editar Objetivos y Biometría</span>
 
               <div>
                 <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-1`}>Nombre</label>
@@ -2272,7 +2313,12 @@ export default function App() {
                   <input 
                     type="number" step="0.1"
                     value={editProfile?.peso || ''} 
-                    onChange={(e) => setEditProfile({ ...editProfile, peso: e.target.value })}
+                    onChange={(e) => {
+                      const newPeso = e.target.value;
+                      const updated = { ...editProfile, peso: newPeso };
+                      updated.customMacros = calculateScienceMacros(updated);
+                      setEditProfile(updated);
+                    }}
                     className={`w-full bg-transparent border-b ${theme.border} py-2 text-xs font-bold outline-none`}
                   />
                 </div>
@@ -2281,7 +2327,12 @@ export default function App() {
                   <input 
                     type="number" 
                     value={editProfile?.altura || ''} 
-                    onChange={(e) => setEditProfile({ ...editProfile, altura: e.target.value })}
+                    onChange={(e) => {
+                      const newAlt = e.target.value;
+                      const updated = { ...editProfile, altura: newAlt };
+                      updated.customMacros = calculateScienceMacros(updated);
+                      setEditProfile(updated);
+                    }}
                     className={`w-full bg-transparent border-b ${theme.border} py-2 text-xs font-bold outline-none`}
                   />
                 </div>
@@ -2291,7 +2342,12 @@ export default function App() {
                 <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-1`}>Objetivo Principal</label>
                 <select 
                   value={editProfile?.objetivo || 'Recomposición'} 
-                  onChange={(e) => setEditProfile({ ...editProfile, objetivo: e.target.value })}
+                  onChange={(e) => {
+                    const newObj = e.target.value;
+                    const updated = { ...editProfile, objetivo: newObj };
+                    updated.customMacros = calculateScienceMacros(updated);
+                    setEditProfile(updated);
+                  }}
                   className={`w-full bg-transparent border-b ${theme.border} py-2 text-xs font-bold outline-none`}
                 >
                   <option value="Perder Grasa" className={isDark ? "bg-black" : "bg-white"}>Perder Grasa / Definición</option>
@@ -2300,6 +2356,54 @@ export default function App() {
                 </select>
               </div>
 
+              {/* SECCIÓN INTERACTIVA DE AJUSTE PERSONALIZADO DE MACROS */}
+              <div className={`p-4 ${theme.secondary} rounded-2xl border ${theme.border} space-y-3`}>
+                <div className="flex justify-between items-center border-b border-white/10 pb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Ajuste de Metas Diarias</span>
+                  <button 
+                    type="button" 
+                    onClick={handleRecalculateMacrosClick}
+                    className="text-[9px] font-bold text-blue-400 underline"
+                  >
+                    Auto-Calcular
+                  </button>
+                </div>
+
+                {macroContradictionWarning && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[9px] text-amber-400 leading-relaxed font-medium">
+                    {macroContradictionWarning}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className={`text-[9px] ${theme.muted} font-bold block mb-1 uppercase`}>Calorías (kcal)</label>
+                    <input 
+                      type="number" 
+                      value={editProfile?.customMacros?.cal || calculateScienceMacros(editProfile).cal} 
+                      onChange={(e) => setEditProfile({
+                        ...editProfile, 
+                        customMacros: { ...(editProfile.customMacros || calculateScienceMacros(editProfile)), cal: parseInt(e.target.value) || 0 }
+                      })}
+                      className={`w-full bg-transparent border-b ${theme.border} py-1 font-bold outline-none`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`text-[9px] text-emerald-500 font-bold block mb-1 uppercase`}>Proteína (g)</label>
+                    <input 
+                      type="number" 
+                      value={editProfile?.customMacros?.protein || calculateScienceMacros(editProfile).protein} 
+                      onChange={(e) => setEditProfile({
+                        ...editProfile, 
+                        customMacros: { ...(editProfile.customMacros || calculateScienceMacros(editProfile)), protein: parseInt(e.target.value) || 0 }
+                      })}
+                      className={`w-full bg-transparent border-b ${theme.border} py-1 font-bold outline-none`}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SELECTOR MÚLTIPLE DE MATERIAL DE ENTRENO */}
               <div>
                 <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-2`}>Equipamiento Disponible</label>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
@@ -2328,22 +2432,16 @@ export default function App() {
               </button>
             </form>
 
-            {/* BOTÓN DE REINICIO TOTAL (EMPEZAR DE 0) */}
+            {/* BOTÓN REINICIAR DE 0 DE FORMA SEGURA */}
             <button 
               type="button"
               onClick={() => {
                 if (window.confirm("⚠️ ¿Estás seguro de que quieres BORRAR TODOS los datos y empezar el reto de 0 desde el Día 1?")) {
-                  // Mantiene tu correo y nombre para que no tengas que volver a hacer login
                   const adminProfile = userProfile ? { ...userProfile } : null;
-                  
-                  // Limpia todo el almacenamiento de la app
                   localStorage.clear();
-                  
-                  // Guarda solo tu perfil de admin si existía
                   if (adminProfile) {
                     localStorage.setItem('active_user_profile', JSON.stringify(adminProfile));
                   }
-                  
                   window.location.reload();
                 }
               }} 
@@ -2357,7 +2455,7 @@ export default function App() {
             </button>
           </div>
         </div>
-      )} 
+      )}
 
       {/* MODAL DE SUSCRIPCIÓN */}
       {showPaywallModal && !isPro && !isDeveloper && (
