@@ -356,9 +356,10 @@ const TROPHY_DEFINITIONS = {
   legend_60: { title: 'The Icon', desc: 'Finaliza los 60 días completos', icon: '✦' }
 };
 
+// CÁLCULO MEJORADO PARA RECOMPOSICIÓN CORPORAL (EVIDENCIA CIENTÍFICA)
 const calculateScienceMacros = (profile) => {
   if (!profile || !profile.peso || !profile.altura || !profile.edad) {
-    return { cal: 2000, protein: 140, carbs: 200, fat: 60 };
+    return { cal: 2000, protein: 150, carbs: 180, fat: 65 };
   }
 
   const peso = parseFloat(profile.peso);
@@ -374,16 +375,21 @@ const calculateScienceMacros = (profile) => {
 
   let targetCal = tdee;
   const obj = profile.objetivo ? profile.objetivo.toLowerCase() : '';
+  
   if (obj.includes('perder') || obj.includes('definición') || obj.includes('grasa')) {
-    targetCal -= 300; 
+    targetCal -= 400; 
   } else if (obj.includes('ganar') || obj.includes('volumen') || obj.includes('músculo')) {
     targetCal += 250; 
+  } else {
+    // Recomposición corporal: Ligero déficit / Mantenimiento ajustado
+    targetCal -= 150;
   }
 
-  const protein = Math.round(peso * 2.0); 
-  const fat = Math.round(peso * 0.9); 
+  // Ratios optimizados: Proteína alta (2.2g/kg), Grasas moderadas (1.0g/kg), Carbs balanceados
+  const protein = Math.round(peso * 2.2); 
+  const fat = Math.round(peso * 1.0); 
   const remainingCal = targetCal - (protein * 4) - (fat * 9);
-  const carbs = Math.max(50, Math.round(remainingCal / 4)); 
+  const carbs = Math.max(80, Math.round(remainingCal / 4)); 
 
   return { cal: Math.round(targetCal), protein, carbs, fat };
 };
@@ -526,7 +532,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : {};
   });
 
-  const [stepGoal] = useState(10000);
+  const [stepInputVal, setStepInputVal] = useState('');
 
   const [logs, setLogs] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_workout_logs`);
@@ -551,7 +557,6 @@ export default function App() {
   const [strategyReport, setStrategyReport] = useState(null);
   const [showStrategyModal, setShowStrategyModal] = useState(false);
 
-  // ESTADOS DE NUTRICIÓN ADAPTATIVA Y EVENTOS
   const [nutritionViewMode, setNutritionViewMode] = useState('daily');
   const [showMacroBreakdownChart, setShowMacroBreakdownChart] = useState(true);
   const [showCustomIngredientForm, setShowCustomIngredientForm] = useState(false);
@@ -564,7 +569,6 @@ export default function App() {
   const [showSocialCompensationModal, setShowSocialCompensationModal] = useState(false);
   const [eventExtraCalories, setEventExtraCalories] = useState('600');
 
-  // CONTROL HORARIO (23:00 HRS ALERTA DIARIA)
   const [currentHour, setCurrentHour] = useState(new Date().getHours());
   useEffect(() => {
     const interval = setInterval(() => setCurrentHour(new Date().getHours()), 60000);
@@ -573,10 +577,16 @@ export default function App() {
 
   const isNightCheckTime = currentHour >= 23;
 
-  // CÁLCULO DINÁMICO DE MACROS OBJETIVO CON CICLADO Y EVENTOS
   const isTrainingDay = (dayNum) => {
     const dayOfWeek = ((dayNum - 1) % 7) + 1;
     return workoutPlan.days.includes(dayOfWeek);
+  };
+
+  const getDaySessionName = (dayNum) => {
+    const dayOfWeek = ((dayNum - 1) % 7) + 1;
+    if (!workoutPlan.days.includes(dayOfWeek)) return 'Descanso';
+    const session = workoutPlan.sessions[dayOfWeek];
+    return session?.name || 'Entrenamiento';
   };
 
   const getBaseScienceMacros = () => userProfile?.customMacros || calculateScienceMacros(userProfile);
@@ -590,11 +600,11 @@ export default function App() {
 
     if (cycleMacrosByWorkout) {
       if (isTrainingDay(selectedDay)) {
-        adaptedCal = Math.round(base.cal * 1.08); // +8% Kcal en día de entreno
-        adaptedCarbs = Math.round(base.carbs * 1.15); // +15% Carbs
+        adaptedCal = Math.round(base.cal * 1.08); 
+        adaptedCarbs = Math.round(base.carbs * 1.15); 
       } else {
-        adaptedCal = Math.round(base.cal * 0.92); // -8% Kcal en descanso
-        adaptedCarbs = Math.round(base.carbs * 0.85); // -15% Carbs
+        adaptedCal = Math.round(base.cal * 0.92); 
+        adaptedCarbs = Math.round(base.carbs * 0.85); 
       }
     }
 
@@ -1350,6 +1360,13 @@ export default function App() {
     alert(`¡Medidas guardadas correctamente para el Día ${selectedDay}!`);
   };
 
+  const handleSaveStepsForDay = () => {
+    const val = parseInt(stepInputVal) || 0;
+    setDailySteps(prev => ({ ...prev, [selectedDay]: val }));
+    setUserXP(prev => prev + 20);
+    alert(`¡${val.toLocaleString()} pasos guardados para el Día ${selectedDay}!`);
+  };
+
   const handleApplySocialCompensation = () => {
     const extra = parseInt(eventExtraCalories) || 0;
     if (extra <= 0) return;
@@ -1554,7 +1571,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* CONTROL Y REGISTRO DE PASOS DIARIOS (NEAT) */}
+            {/* CONTROL Y REGISTRO DE PASOS DIARIOS (NEAT) - CORREGIDO */}
             <div className={`${theme.card} border ${theme.border} rounded-[2rem] p-6 space-y-4 ${theme.shadow}`}>
               <div className="flex justify-between items-center">
                 <div>
@@ -1566,21 +1583,29 @@ export default function App() {
                 </span>
               </div>
 
-              <div className="flex items-center gap-4">
-                <input 
-                  type="number" 
-                  value={currentStepsCount || ''} 
-                  onChange={(e) => setDailySteps({ ...dailySteps, [selectedDay]: parseInt(e.target.value) || 0 })}
-                  placeholder="Ej. 8500" 
-                  className={`flex-1 bg-transparent border-b ${theme.border} py-2 text-2xl font-black outline-none`}
-                />
-                <span className={`text-xs ${theme.muted} font-bold`}>Pasos</span>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 flex items-center gap-2 border-b border-white/20 pb-1">
+                  <input 
+                    type="number" 
+                    value={stepInputVal !== '' ? stepInputVal : (currentStepsCount || '')} 
+                    onChange={(e) => setStepInputVal(e.target.value)}
+                    placeholder="Ej. 8500" 
+                    className="w-full bg-transparent py-1 text-2xl font-black outline-none"
+                  />
+                  <span className={`text-xs ${theme.muted} font-bold uppercase`}>Pasos</span>
+                </div>
+                <button 
+                  onClick={handleSaveStepsForDay}
+                  className={`px-5 py-3 ${theme.primary} font-black text-[10px] uppercase tracking-widest rounded-full hover:scale-105 transition-transform`}
+                >
+                  Guardar
+                </button>
               </div>
 
               <div className={`h-2.5 w-full ${isDark ? 'bg-gray-800' : 'bg-gray-200'} rounded-full overflow-hidden`}>
                 <div 
                   className="h-full bg-emerald-500 transition-all duration-500" 
-                  style={{ width: `${Math.min(100, (currentStepsCount / stepGoal) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (currentStepsCount / 10000) * 100)}%` }}
                 ></div>
               </div>
             </div>
@@ -1592,11 +1617,12 @@ export default function App() {
               {workoutPlan.days.length > 0 ? 'Cambiar plan de entrenamiento' : 'Planificar entrenamiento'}
             </button>
 
+            {/* ENFOQUE DE HOY CON NOMBRE DE SESIÓN REAL */}
             <div className={`${theme.card} border ${theme.border} rounded-[2rem] p-6 flex justify-between items-center ${theme.shadow} transition-colors duration-500`}>
               <div>
                 <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block mb-2`}>Enfoque de hoy</span>
                 <h2 className="text-2xl font-black capitalize">
-                  {isTrainingDay(selectedDay) ? (getDayExercises(selectedDay)[0]?.target || 'Entreno') : 'Descanso'}
+                  {getDaySessionName(selectedDay)}
                 </h2>
               </div>
               {isTrainingDay(selectedDay) && (
