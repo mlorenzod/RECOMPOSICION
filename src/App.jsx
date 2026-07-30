@@ -546,7 +546,7 @@ export default function App() {
 
   // ESTADOS DE NUTRICIÓN
   const [nutritionViewMode, setNutritionViewMode] = useState('daily');
-  const [showMacroBreakdownChart, setShowMacroBreakdownChart] = useState(false);
+  const [showMacroBreakdownChart, setShowMacroBreakdownChart] = useState(true); // Desplegado por defecto
   const [showCustomIngredientForm, setShowCustomIngredientForm] = useState(false);
   const [newIngredientName, setNewIngredientName] = useState('');
   const [newIngredientUnit, setNewIngredientNameUnit] = useState('g');
@@ -556,7 +556,7 @@ export default function App() {
   // ESTADO REEMPLAZAR EJERCICIO CON IA
   const [replacingExerciseId, setReplacingExerciseId] = useState(null);
 
-  // CAMARA TRASERA / FRONTAL PARA PROGRESO
+  // CÁMARA TRASERA / FRONTAL PARA PROGRESO
   const [cameraFacingMode, setCameraFacingMode] = useState("environment");
 
   // CÁLCULO DINÁMICO DE MACROS OBJETIVO
@@ -637,9 +637,15 @@ export default function App() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const [textFoodInput, setTextFoodInput] = useState('');
+  
+  // ESTADOS DE CONTROL DE AUDIO INTERACTIVO
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const audioPlayerRef = useRef(null);
 
   const [selectedMetric, setSelectedMetric] = useState('waist');
   const [selectedAnalyticsEx, setSelectedAnalyticsEx] = useState('bench');
@@ -649,6 +655,7 @@ export default function App() {
   const [trackerChest, setTrackerChest] = useState('');
   const [trackerArm, setTrackerArm] = useState('');
 
+  // NORMALIZACIÓN DE IMAGEN CON CANVAS (UNIFICA GALERÍA Y CÁMARA)
   const compressImageForAI = (file, maxWidth = 800) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -667,6 +674,10 @@ export default function App() {
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
+          
+          // Limpiar fondo a negro antes de dibujar por transparencia en PNGs
+          ctx.fillStyle = "#000000";
+          ctx.fillRect(0, 0, width, height);
           ctx.drawImage(img, 0, 0, width, height);
 
           const base64Url = canvas.toDataURL('image/jpeg', 0.8);
@@ -973,47 +984,64 @@ export default function App() {
     } 
   };
 
-  const handleToggleAudioRecording = async () => {
+  // CONTROL INTERACTIVO DE GRABACIÓN Y PREVIEW DE AUDIO
+  const startAudioRecording = async () => {
     if (!verifyAccessOrShowPaywall()) return;
-    if (isRecordingAudio) {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-      setIsRecordingAudio(false);
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioChunksRef.current = [];
-        const mediaRecorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = mediaRecorder;
-        
-        mediaRecorder.ondataavailable = (event) => { 
-          if (event.data.size > 0) audioChunksRef.current.push(event.data); 
-        };
-        
-        mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64Audio = reader.result.split(',')[1];
-            processFoodWithGemini({ 
-              inlineData: { 
-                mimeType: mediaRecorder.mimeType.split(';')[0] || 'audio/webm', 
-                data: base64Audio 
-              } 
-            });
-          };
-          reader.readAsDataURL(audioBlob);
-          stream.getTracks().forEach(track => track.stop());
-        };
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
 
-        mediaRecorder.start();
-        setIsRecordingAudio(true);
-      } catch (err) { 
-        console.error("Error al acceder al micrófono:", err);
-        alert("No se pudo acceder al micrófono."); 
-      }
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+        const url = URL.createObjectURL(blob);
+        setAudioBlob(blob);
+        setAudioUrl(url);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecordingAudio(true);
+    } catch (err) {
+      console.error("Error al acceder al micrófono:", err);
+      alert("No se pudo acceder al micrófono.");
     }
+  };
+
+  const stopAudioRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecordingAudio(false);
+  };
+
+  const discardAudioRecording = () => {
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioBlob(null);
+    setAudioUrl(null);
+    setIsPlayingAudio(false);
+  };
+
+  const processAudioRecordingWithAI = () => {
+    if (!audioBlob) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64Audio = reader.result.split(',')[1];
+      const mime = audioBlob.type.split(';')[0] || 'audio/webm';
+      processFoodWithGemini({
+        inlineData: {
+          mimeType: mime,
+          data: base64Audio
+        }
+      });
+      discardAudioRecording();
+    };
+    reader.readAsDataURL(audioBlob);
   };
 
   const handleFoodQuantityChange = (index, newQuantity) => {
@@ -1358,16 +1386,27 @@ export default function App() {
 
   const scanTotalCal = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.cal || 0), 0) : 0;
   const scanTotalProt = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.prot || 0), 0) : 0;
-
-  const protDiff = targetMacros.protein - currentMacros.protein;
-  const carbsDiff = targetMacros.carbs - currentMacros.carbs;
-  const fatDiff = targetMacros.fat - currentMacros.fat;
+  const scanTotalCarbs = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.carbs || 0), 0) : 0;
+  const scanTotalFat = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.fat || 0), 0) : 0;
 
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
       <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleMultipleFileUpload} />
       <input type="file" ref={mealFileInputRef} accept="image/*" className="hidden" onChange={handleMealImageUpload} />
       <input type="file" ref={mealCameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleMealImageUpload} />
+
+      {/* OVERLAY / SPINNER DE CARGA AL ANALIZAR CON IA */}
+      {isScanning && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-[#111] border border-white/10 rounded-[2.5rem] p-8 max-w-xs w-full flex flex-col items-center space-y-6 text-center shadow-2xl">
+            <div className="w-14 h-14 border-4 border-t-emerald-500 border-white/10 rounded-full animate-spin"></div>
+            <div className="space-y-1">
+              <h3 className="text-lg font-black text-white">Analizando Plato</h3>
+              <p className="text-xs text-gray-400 font-medium">Gemini está identificando ingredientes y estimando valores macronutricionales...</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* HEADER */}
       <header className={`sticky top-0 z-40 ${theme.navBg} backdrop-blur-xl border-b ${theme.border} px-6 py-4 flex justify-between items-center transition-colors duration-500`}>
@@ -1659,15 +1698,81 @@ export default function App() {
             {/* REGISTRO INTELIGENTE */}
             <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
               <span className={`text-[10px] ${theme.muted} font-bold block uppercase tracking-widest`}>Registro Inteligente</span>
+              
               <form onSubmit={handleTextFoodSubmit} className="space-y-4">
                 <div className="relative">
                   <input type="text" placeholder="Ej. Bowl de salmón y arroz..." value={textFoodInput} onChange={(e) => setTextFoodInput(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-3 pr-28 text-sm outline-none transition-colors font-medium`} />
                   <div className="absolute right-0 top-2 flex items-center gap-1.5">
-                    <button type="button" onClick={handleToggleAudioRecording} title="Grabar nota de voz" className={`p-1.5 rounded-full transition-all ${isRecordingAudio ? 'text-red-500 scale-125 animate-pulse' : theme.muted}`}>🎙️</button>
+                    <button 
+                      type="button" 
+                      onClick={isRecordingAudio ? stopAudioRecording : startAudioRecording} 
+                      title="Nota de voz" 
+                      className={`p-1.5 rounded-full transition-all ${isRecordingAudio ? 'text-red-500 scale-125 animate-pulse' : theme.muted}`}
+                    >
+                      🎙️
+                    </button>
                     <button type="button" onClick={() => mealCameraInputRef.current.click()} title="Tomar foto con la cámara" className={`p-1.5 ${theme.muted} hover:text-white transition-colors`}>📷</button>
                     <button type="button" onClick={() => mealFileInputRef.current.click()} title="Elegir foto de la galería" className={`p-1.5 ${theme.muted} hover:text-white transition-colors`}>🖼️</button>
                   </div>
                 </div>
+
+                {/* MODAL DE GRABACIÓN DE AUDIO ACTIVA */}
+                {isRecordingAudio && (
+                  <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-between animate-pulse">
+                    <div className="flex items-center gap-3">
+                      <span className="w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
+                      <span className="text-xs font-bold text-red-500 uppercase tracking-widest">Escuchando voz...</span>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={stopAudioRecording}
+                      className="px-4 py-1.5 bg-red-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest"
+                    >
+                      Detener ⏹️
+                    </button>
+                  </div>
+                )}
+
+                {/* PANEL DE VISTA PREVIA Y CONTROL DE AUDIO GRABADO */}
+                {audioBlob && !isRecordingAudio && (
+                  <div className={`p-4 ${theme.secondary} border border-emerald-500/40 rounded-2xl space-y-3 animate-fadeIn`}>
+                    <div className="flex justify-between items-center border-b border-white/10 pb-2">
+                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <span>🎙️</span> Nota de Voz Grabada
+                      </span>
+                      <button type="button" onClick={discardAudioRecording} className="text-gray-500 hover:text-red-500 text-xs font-bold">🗑️ Borrar</button>
+                    </div>
+
+                    <audio ref={audioPlayerRef} src={audioUrl} onEnded={() => setIsPlayingAudio(false)} className="hidden" />
+
+                    <div className="flex items-center gap-3">
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          if (isPlayingAudio) {
+                            audioPlayerRef.current.pause();
+                            setIsPlayingAudio(false);
+                          } else {
+                            audioPlayerRef.current.play();
+                            setIsPlayingAudio(true);
+                          }
+                        }}
+                        className={`px-4 py-2 ${theme.primary} rounded-xl text-xs font-bold uppercase tracking-widest flex items-center gap-2`}
+                      >
+                        {isPlayingAudio ? '⏸️ Pausar' : '▶️ Reproducir'}
+                      </button>
+
+                      <button 
+                        type="button" 
+                        onClick={processAudioRecordingWithAI}
+                        disabled={isScanning}
+                        className="flex-1 py-2 bg-emerald-500 text-black font-black text-[10px] uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-md text-center"
+                      >
+                        Procesar con IA ✨
+                      </button>
+                    </div>
+                  </div>
+                )}
                 
                 <button 
                   type="submit" 
@@ -1683,7 +1788,7 @@ export default function App() {
               </form>
             </div>
 
-            {/* TARJETA DE CONFIRMACIÓN CON SLIDERS Y UNIDADES */}
+            {/* TARJETA DE CONFIRMACIÓN CON SLIDERS, SUMATORIO TOTAL Y UNIDADES */}
             {scanResult && (
               <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-6 space-y-6 animate-fadeIn ${theme.shadow} relative overflow-hidden`}>
                 <div className={`flex items-start justify-between border-b ${theme.border} pb-4`}>
@@ -1710,6 +1815,17 @@ export default function App() {
                     "{scanResult.goalFeedback}"
                   </div>
                 )}
+
+                {/* SUMATORIO TOTAL DE VALORES DEL PLATO */}
+                <div className={`p-4 ${theme.secondary} rounded-2xl border ${theme.border} space-y-2`}>
+                  <span className={`text-[9px] ${theme.muted} font-bold uppercase tracking-widest block border-b ${theme.border} pb-1`}>Sumatorio Total del Plato</span>
+                  <div className="flex justify-between items-center text-xs font-black">
+                    <span className={theme.text}>🔥 {scanTotalCal} kcal</span>
+                    <span className="text-emerald-500">🥩 {scanTotalProt}g P</span>
+                    <span className="text-blue-500">🍞 {scanTotalCarbs}g C</span>
+                    <span className="text-amber-500">🥑 {scanTotalFat}g F</span>
+                  </div>
+                </div>
 
                 <button 
                   type="button" 
