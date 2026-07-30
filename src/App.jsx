@@ -2328,12 +2328,36 @@ export default function App() {
               </button>
             </form>
 
-            <button onClick={() => { localStorage.removeItem('active_user_profile'); window.location.reload(); }} className="w-full py-3 bg-red-600/20 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-red-600 hover:text-white transition-colors">
+            {/* BOTÓN DE REINICIO TOTAL (EMPEZAR DE 0) */}
+            <button 
+              type="button"
+              onClick={() => {
+                if (window.confirm("⚠️ ¿Estás seguro de que quieres BORRAR TODOS los datos y empezar el reto de 0 desde el Día 1?")) {
+                  // Mantiene tu correo y nombre para que no tengas que volver a hacer login
+                  const adminProfile = userProfile ? { ...userProfile } : null;
+                  
+                  // Limpia todo el almacenamiento de la app
+                  localStorage.clear();
+                  
+                  // Guarda solo tu perfil de admin si existía
+                  if (adminProfile) {
+                    localStorage.setItem('active_user_profile', JSON.stringify(adminProfile));
+                  }
+                  
+                  window.location.reload();
+                }
+              }} 
+              className="w-full py-3.5 bg-red-600 text-white font-black text-[10px] uppercase tracking-widest rounded-full shadow-lg hover:bg-red-700 transition-all active:scale-95"
+            >
+              💣 Reiniciar App de 0 (Admin)
+            </button>
+
+            <button onClick={() => { localStorage.removeItem('active_user_profile'); window.location.reload(); }} className="w-full py-3 bg-gray-500/20 text-gray-400 text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-gray-500/40 hover:text-white transition-colors">
               Cerrar Sesión
             </button>
           </div>
         </div>
-      )}
+      )} 
 
       {/* MODAL DE SUSCRIPCIÓN */}
       {showPaywallModal && !isPro && !isDeveloper && (
