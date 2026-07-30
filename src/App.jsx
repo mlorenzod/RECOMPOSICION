@@ -19,7 +19,7 @@ const selectRecipeImage = (title = '', ingredients = []) => {
   return RECIPE_IMAGES_DB.default[Math.floor(Math.random() * RECIPE_IMAGES_DB.default.length)];
 };
 
-// LISTA DETALLADA DE EQUIPAMIENTO COMPARTIDA CON EL CUESTIONARIO INICIAL
+// LISTA DETALLADA DE EQUIPAMIENTO
 const AVAILABLE_EQUIPMENT_OPTIONS = [
   { id: 'mancuernas', label: 'Mancuernas' },
   { id: 'barra', label: 'Barra y Discos' },
@@ -32,7 +32,7 @@ const AVAILABLE_EQUIPMENT_OPTIONS = [
   { id: 'calistenia', label: 'Peso Corporal' }
 ];
 
-// ========== COMPONENTE CUESTIONARIO INICIAL (ONBOARDING MEJORADO) ==========
+// COMPONENTE CUESTIONARIO INICIAL (ONBOARDING)
 const OnboardingModal = ({ onComplete }) => {
   const [formData, setEditForm] = useState({
     peso: '75',
@@ -127,7 +127,6 @@ const OnboardingModal = ({ onComplete }) => {
             </select>
           </div>
 
-          {/* SELECTOR DE MATERIAL EN EL PRIMER CUESTIONARIO */}
           <div>
             <label className="text-[10px] text-gray-400 font-bold uppercase block mb-2">Equipamiento Disponible</label>
             <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
@@ -163,7 +162,7 @@ const OnboardingModal = ({ onComplete }) => {
   );
 };
 
-// ========== LISTA DE EJERCICIOS COMPUESTOS ==========
+// LISTA DE EJERCICIOS COMPUESTOS
 const COMPOUND_EXERCISES = {
   squat: { name: 'Sentadilla', target: 'Pierna', img: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=600&q=80' },
   bench: { name: 'Press Banca', target: 'Pecho', img: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=80' },
@@ -424,10 +423,21 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [editProfile, setEditProfile] = useState(userProfile);
+  // CARGA SEGURA DE EDITPROFILE
+  const [editProfile, setEditProfile] = useState(() => userProfile || {
+    name: '',
+    peso: '75',
+    altura: '175',
+    edad: '28',
+    genero: 'hombre',
+    objetivo: 'Recomposición',
+    equipamientoArray: ['mancuernas', 'banco']
+  });
 
   useEffect(() => {
-    setEditProfile(userProfile);
+    if (userProfile) {
+      setEditProfile(userProfile);
+    }
   }, [userProfile]);
 
   const [authStep, setAuthStep] = useState(userProfile ? 'app' : 'login');
@@ -539,7 +549,7 @@ export default function App() {
   // CAMARA TRASERA / FRONTAL PARA PROGRESO
   const [cameraFacingMode, setCameraFacingMode] = useState("environment");
 
-  // CÁLCULO DINÁMICO DE MACROS OBJETIVO (SIEMPRE ACTUALIZADO)
+  // CÁLCULO DINÁMICO DE MACROS OBJETIVO
   const baseTargetMacros = userProfile?.customMacros || calculateScienceMacros(userProfile);
   
   const isWeeklyView = nutritionViewMode === 'weekly';
@@ -660,7 +670,6 @@ export default function App() {
     });
   };
 
-  // GUARDAR AJUSTES DE PERFIL CON RECÁLCULO INMEDIATO DE MACROS EN LA APP
   const handleSaveProfileSettings = (e) => {
     e.preventDefault();
     const recalculated = {
@@ -2137,7 +2146,6 @@ export default function App() {
 
       {/* ===================== MODALES ===================== */}
       
-      {/* MODAL CÁMARA CON OVERLAY ANATÓMICO SILUETA HUMANA Y CAMBIO DE CÁMARA */}
       {showCameraModal && (
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between p-6 animate-fadeIn overflow-y-auto">
           <div className="w-full max-w-sm flex justify-between items-center py-2">
@@ -2153,7 +2161,6 @@ export default function App() {
           <div className="relative w-full max-w-sm aspect-[9/16] bg-black rounded-[2rem] overflow-hidden border border-white/20 flex items-center justify-center my-auto shadow-2xl">
             <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
             
-            {/* OVERLAY ANATÓMICO SILUETA HUMANA MEJORADO */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-4 transition-opacity" style={{ opacity: overlayOpacity }}>
               <svg viewBox="0 0 100 200" className="w-full h-full stroke-white/80 fill-none" strokeWidth="0.8" strokeDasharray="2 1">
                 <ellipse cx="50" cy="24" rx="8" ry="10" />
@@ -2394,7 +2401,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE AJUSTES Y CONFIGURACIÓN CON ASESOR INTERACTIVO DE MACROS */}
+      {/* MODAL DE AJUSTES ROBUSTO Y SEGURADO */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -2562,7 +2569,6 @@ export default function App() {
               </button>
             </form>
 
-            {/* BOTÓN REINICIAR DE 0 */}
             <button 
               type="button"
               onClick={() => {
