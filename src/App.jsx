@@ -32,7 +32,7 @@ const AVAILABLE_EQUIPMENT_OPTIONS = [
   { id: 'calistenia', label: 'Peso Corporal' }
 ];
 
-// COMPONENTE CUESTIONARIO INICIAL (ONBOARDING)
+// CUESTIONARIO INICIAL (ONBOARDING)
 const OnboardingModal = ({ onComplete }) => {
   const [formData, setEditForm] = useState({
     peso: '75',
@@ -423,20 +423,30 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  // ESTADO DE CONFIGURACIÓN SEGURO CONTRA NULOS
-  const [editProfile, setEditProfile] = useState(() => userProfile || {
-    name: 'Atleta',
-    peso: '75',
-    altura: '175',
-    edad: '28',
-    genero: 'hombre',
-    objetivo: 'Recomposición',
-    equipamientoArray: ['mancuernas', 'banco']
-  });
+  // ESTADO DE CONFIGURACIÓN SEGURO Y PROTEGIDO CONTRA NULL
+  const [editProfile, setEditProfile] = useState(() => ({
+    name: userProfile?.name || 'Atleta',
+    peso: userProfile?.peso || '75',
+    altura: userProfile?.altura || '175',
+    edad: userProfile?.edad || '28',
+    genero: userProfile?.genero || 'hombre',
+    objetivo: userProfile?.objetivo || 'Recomposición',
+    equipamientoArray: userProfile?.equipamientoArray || ['mancuernas', 'banco'],
+    customMacros: userProfile?.customMacros || null
+  }));
 
   useEffect(() => {
     if (userProfile) {
-      setEditProfile(userProfile);
+      setEditProfile({
+        name: userProfile.name || 'Atleta',
+        peso: userProfile.peso || '75',
+        altura: userProfile.altura || '175',
+        edad: userProfile.edad || '28',
+        genero: userProfile.genero || 'hombre',
+        objetivo: userProfile.objetivo || 'Recomposición',
+        equipamientoArray: Array.isArray(userProfile.equipamientoArray) ? userProfile.equipamientoArray : ['mancuernas', 'banco'],
+        customMacros: userProfile.customMacros || null
+      });
     }
   }, [userProfile]);
 
@@ -638,7 +648,6 @@ export default function App() {
   const [selectedMetric, setSelectedMetric] = useState('waist');
   const [selectedAnalyticsEx, setSelectedAnalyticsEx] = useState('bench');
   
-  // ESTADOS DE SEGUIMIENTO FÍSICO CORREGIDOS
   const [trackerWeight, setTrackerWeight] = useState(userProfile?.peso || '75');
   const [trackerWaist, setTrackerWaist] = useState('');
   const [trackerChest, setTrackerChest] = useState('');
@@ -1260,7 +1269,6 @@ export default function App() {
     setScanResult(null);
   };
 
-  // REGISTRO Y PERSISTENCIA DIRECTA DE MEDIDAS FÍSICAS
   const handleSavePhysicalTracking = () => {
     if (!trackerWaist) return alert('Cintura requerida para el historial clínico.');
     const newLog = { 
@@ -1354,10 +1362,6 @@ export default function App() {
 
   const scanTotalCal = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.cal || 0), 0) : 0;
   const scanTotalProt = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.prot || 0), 0) : 0;
-
-  const protDiff = targetMacros.protein - currentMacros.protein;
-  const carbsDiff = targetMacros.carbs - currentMacros.carbs;
-  const fatDiff = targetMacros.fat - currentMacros.fat;
 
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
@@ -1619,7 +1623,7 @@ export default function App() {
                       <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.protein / targetMacros.protein) * 100)}%` }}></div>
                     </div>
                     <div className="text-[8px] text-right font-semibold">
-                      {targetMacros.protein - currentMacros.protein > 0 ? <span className="text-emerald-500">Quedan {targetMacros.protein - currentMacros.protein}g</span> : <span className="text-gray-400">Meta cumplida</span>}
+                      {protDiff > 0 ? <span className="text-emerald-500">Quedan {protDiff}g</span> : <span className="text-gray-400">Meta cumplida</span>}
                     </div>
                   </div>
 
@@ -1632,7 +1636,7 @@ export default function App() {
                       <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.carbs / targetMacros.carbs) * 100)}%` }}></div>
                     </div>
                     <div className="text-[8px] text-right font-semibold">
-                      {targetMacros.carbs - currentMacros.carbs > 0 ? <span className="text-blue-500">Quedan {targetMacros.carbs - currentMacros.carbs}g</span> : <span className="text-gray-400">Meta cumplida</span>}
+                      {carbsDiff > 0 ? <span className="text-blue-500">Quedan {carbsDiff}g</span> : <span className="text-gray-400">Meta cumplida</span>}
                     </div>
                   </div>
 
@@ -1645,7 +1649,7 @@ export default function App() {
                       <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.fat / targetMacros.fat) * 100)}%` }}></div>
                     </div>
                     <div className="text-[8px] text-right font-semibold">
-                      {targetMacros.fat - currentMacros.fat > 0 ? <span className="text-amber-500">Quedan {targetMacros.fat - currentMacros.fat}g</span> : <span className="text-gray-400">Meta cumplida</span>}
+                      {fatDiff > 0 ? <span className="text-amber-500">Quedan {fatDiff}g</span> : <span className="text-gray-400">Meta cumplida</span>}
                     </div>
                   </div>
                 </div>
@@ -2005,7 +2009,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ======================= MÓDULO SEGUIMIENTO (PROGRESS CORREGIDO CON FORMULARIO REACTIVO) ======================= */}
+        {/* ======================= MÓDULO SEGUIMIENTO ======================= */}
         {activeTab === 'seguimiento' && (
           <div className="space-y-8 animate-fadeIn pb-6">
             
@@ -2105,7 +2109,7 @@ export default function App() {
                     <div key={idx} className="flex-1 flex flex-col items-center gap-2 group relative">
                       <div className="h-full w-full flex items-end">
                         <div className={`w-full ${isDark ? 'bg-[#333]' : 'bg-gray-300'} group-hover:${isDark ? 'bg-white' : 'bg-black'} rounded-t-md transition-all duration-500`} style={{ height: `${heightPct}%` }}>
-                          <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] font-bold text-white bg-black/80 px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">{val}k</span>
+                          <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[8px] font-bold text-white bg-black/80 px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">{val}k</span>
                         </div>
                       </div>
                       <span className={`text-[8px] ${theme.muted} font-bold uppercase tracking-widest`}>S{idx + 1}</span>
@@ -2115,7 +2119,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* FORMULARIO DE MEDIDAS FÍSICAS TOTALMENTE CONECTADO */}
+            {/* FORMULARIO DE MEDIDAS FÍSICAS CORREGIDO */}
             <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
               <span className={`text-[10px] ${theme.muted} font-bold tracking-widest block uppercase border-b ${theme.border} pb-4`}>Registrar Evolución del Día {selectedDay}</span>
               <div className="space-y-5">
@@ -2156,7 +2160,7 @@ export default function App() {
         </div>
       </footer>
 
-      {/* MODAL CÁMARA NATIIVA SIN ZOOM FORZADO CON PROPORCIÓN DE ENCUADRE 3:4 */}
+      {/* MODAL CÁMARA NATIIVA CON PROPORCIÓN DE ENCUADRE 3:4 */}
       {showCameraModal && (
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between p-6 animate-fadeIn overflow-y-auto">
           <div className="w-full max-w-sm flex justify-between items-center py-2">
@@ -2412,7 +2416,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE CONFIGURACIÓN ROBUSTO CONTRA ERRORES NULOS */}
+      {/* MODAL DE CONFIGURACIÓN REPARADO CONTRA BLOQUEOS DE RENDERIZADO */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -2504,6 +2508,7 @@ export default function App() {
                 </select>
               </div>
 
+              {/* SECCIÓN INTERACTIVA DE MACROS */}
               <div className={`p-4 ${theme.secondary} rounded-2xl border ${theme.border} space-y-3`}>
                 <div className="flex justify-between items-center border-b border-white/10 pb-2">
                   <span className="text-[10px] font-bold uppercase tracking-widest">Ajuste de Metas Diarias</span>
@@ -2516,9 +2521,9 @@ export default function App() {
                   </button>
                 </div>
 
-                {macroContradictionWarning && (
+                {checkMacroContradictions(editProfile) && (
                   <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[9px] text-amber-400 leading-relaxed font-medium">
-                    {macroContradictionWarning}
+                    {checkMacroContradictions(editProfile)}
                   </div>
                 )}
 
@@ -2550,11 +2555,13 @@ export default function App() {
                 </div>
               </div>
 
+              {/* SELECTOR MÚLTIPLE DE MATERIAL DE ENTRENO */}
               <div>
                 <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-2`}>Equipamiento Disponible</label>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
                   {AVAILABLE_EQUIPMENT_OPTIONS.map((equip) => {
-                    const selected = Array.isArray(editProfile?.equipamientoArray) && editProfile.equipamientoArray.includes(equip.id);
+                    const selectedList = editProfile?.equipamientoArray || ['mancuernas'];
+                    const selected = Array.isArray(selectedList) && selectedList.includes(equip.id);
                     return (
                       <button
                         key={equip.id}
