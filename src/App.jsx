@@ -45,7 +45,6 @@ const COMPOUND_EXERCISES = {
   dip: { name: 'Fondos', target: 'Pecho/Tríceps', img: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&q=80' },
 };
 
-// ========== FUNCIONES PARA GENERAR RUTINAS ==========
 const generateWorkoutPlan = (daysPerWeek, focus) => {
   const focusMod = focus === 'fuerza' ? { reps: '5-8', sets: '4-5' } :
                    focus === 'hipertrofia' ? { reps: '8-12', sets: '3-4' } :
@@ -100,7 +99,6 @@ const generateWorkoutPlan = (daysPerWeek, focus) => {
   return plan;
 };
 
-// ========== COMPONENTE PLANIFICADOR ==========
 const WorkoutPlannerModal = ({ isOpen, onClose, onPlanGenerated, currentPlan }) => {
   const [step, setStep] = useState(1);
   const [days, setDays] = useState(currentPlan?.days?.length || 3);
@@ -232,7 +230,6 @@ const TROPHY_DEFINITIONS = {
   legend_60: { title: 'The Icon', desc: 'Finaliza los 60 días completos', icon: '✦' }
 };
 
-// ========== CÁLCULO CIENTÍFICO DE MACROS (MIFFLIN-ST JEOR) ==========
 const calculateScienceMacros = (profile) => {
   if (!profile || !profile.peso || !profile.altura || !profile.edad) {
     return { cal: 2000, protein: 140, carbs: 200, fat: 60 };
@@ -267,9 +264,6 @@ const calculateScienceMacros = (profile) => {
   return { cal: Math.round(targetCal), protein, carbs, fat };
 };
 
-// ============================================================
-// ========== COMPONENTE PRINCIPAL APP ==========
-// ============================================================
 export default function App() {
   useEffect(() => {
     const fontLink = document.createElement('link');
@@ -324,7 +318,6 @@ export default function App() {
     return now;
   });
 
-  // LOGICA PRUEBA GRATUITA DE 7 DIAS
   const [trialStartDate] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_trial_start_date`);
     if (saved) return new Date(saved);
@@ -404,7 +397,7 @@ export default function App() {
   const [showStrategyModal, setShowStrategyModal] = useState(false);
 
   // ESTADOS DE NUTRICIÓN
-  const [nutritionViewMode, setNutritionViewMode] = useState('daily'); // 'daily' o 'weekly'
+  const [nutritionViewMode, setNutritionViewMode] = useState('daily');
   const [showMacroBreakdownChart, setShowMacroBreakdownChart] = useState(false);
   const [showCustomIngredientForm, setShowCustomIngredientForm] = useState(false);
   const [newIngredientName, setNewIngredientName] = useState('');
@@ -417,7 +410,6 @@ export default function App() {
 
   const baseTargetMacros = calculateScienceMacros(userProfile);
   
-  // METAS SEGÚN VISTA (DIARIA O SEMANAL)
   const isWeeklyView = nutritionViewMode === 'weekly';
   const targetMacros = isWeeklyView ? {
     cal: baseTargetMacros.cal * 7,
@@ -426,7 +418,6 @@ export default function App() {
     fat: baseTargetMacros.fat * 7,
   } : baseTargetMacros;
 
-  // CÁLCULO DE CONSUMO DE LOS ÚLTIMOS 7 DÍAS EN VISTA SEMANAL
   const calculateWeeklyNutrition = () => {
     let cal = 0, protein = 0, carbs = 0, fat = 0;
     const startDay = Math.max(1, selectedDay - 6);
@@ -1176,6 +1167,13 @@ export default function App() {
   const currentExercises = planExercises.length > 0 ? planExercises : fallbackExercises;
   const currentWorldIndex = Math.floor((selectedDay - 1) / 10);
   const currentWorldObj = MARIO_WORLDS[currentWorldIndex] || MARIO_WORLDS[0];
+
+  const scanTotalCal = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.cal || 0), 0) : 0;
+  const scanTotalProt = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.prot || 0), 0) : 0;
+
+  const protDiff = targetMacros.protein - currentMacros.protein;
+  const carbsDiff = targetMacros.carbs - currentMacros.carbs;
+  const fatDiff = targetMacros.fat - currentMacros.fat;
 
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
@@ -2234,7 +2232,6 @@ export default function App() {
               <button onClick={() => setShowSettingsModal(false)} className={`${theme.muted} font-bold text-xl hover:text-white transition-colors`}>✕</button>
             </div>
 
-            {/* SECCIÓN SUSCRIPCIÓN EN EL MENÚ DE AJUSTES */}
             <div className={`p-5 rounded-3xl border border-blue-500/30 bg-blue-500/10 space-y-3`}>
               <div className="flex justify-between items-center">
                 <span className="text-xs font-black text-blue-400 uppercase tracking-widest">Plan Actual</span>
@@ -2303,7 +2300,6 @@ export default function App() {
                 </select>
               </div>
 
-              {/* SELECTOR MÚLTIPLE DE MATERIAL DE ENTRENO */}
               <div>
                 <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-2`}>Equipamiento Disponible</label>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
@@ -2339,7 +2335,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE SUSCRIPCIÓN (PAYWALL TRAS EXPIRAR LOS 7 DÍAS) */}
+      {/* MODAL DE SUSCRIPCIÓN */}
       {showPaywallModal && !isPro && !isDeveloper && (
         <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-6 animate-fadeIn backdrop-blur-xl">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-8 shadow-2xl relative overflow-hidden`}>
