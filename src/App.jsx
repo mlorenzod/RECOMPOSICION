@@ -423,9 +423,9 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  // CARGA SEGURA DE EDITPROFILE
+  // ESTADO SEGURO DE CONFIGURACIÓN
   const [editProfile, setEditProfile] = useState(() => userProfile || {
-    name: '',
+    name: 'Atleta',
     peso: '75',
     altura: '175',
     edad: '28',
@@ -1188,6 +1188,7 @@ export default function App() {
     e.target.value = '';
   };
 
+  // CÁMARA NATIIVA SIN ZOOM FORZADO CON PROPORCIÓN DE ENCUADRE 3:4
   const startCamera = async () => {
     setShowCameraModal(true);
     setTimeout(async () => {
@@ -1195,7 +1196,8 @@ export default function App() {
         if (videoRef.current?.srcObject) {
           videoRef.current.srcObject.getTracks().forEach(t => t.stop());
         }
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cameraFacingMode, aspectRatio: 9/16 } }); 
+        // Eliminado aspectRatio rígido 9/16 que causaba zoom óptico
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cameraFacingMode } }); 
         if (videoRef.current) videoRef.current.srcObject = stream; 
       } catch (err) { 
         alert("No se pudo acceder a la cámara seleccionada."); 
@@ -1357,7 +1359,7 @@ export default function App() {
       {/* HEADER */}
       <header className={`sticky top-0 z-40 ${theme.navBg} backdrop-blur-xl border-b ${theme.border} px-6 py-4 flex justify-between items-center transition-colors duration-500`}>
         <div>
-          <span className={`text-[9px] font-bold tracking-[0.2em] ${theme.muted} uppercase block mb-1`}>ATLETA: {userProfile.name}</span>
+          <span className={`text-[9px] font-bold tracking-[0.2em] ${theme.muted} uppercase block mb-1`}>ATLETA: {userProfile?.name || 'Atleta'}</span>
           <h1 className="text-xl font-black tracking-tight flex items-center gap-2">
             STUDIO <span className={`text-[10px] px-3 py-1 rounded-full border ${theme.border} ${theme.muted} font-bold uppercase tracking-widest`}>DÍA {selectedDay}</span>
           </h1>
@@ -2146,10 +2148,11 @@ export default function App() {
 
       {/* ===================== MODALES ===================== */}
       
+      {/* MODAL CÁMARA NATIIVA SIN ZOOM FORZADO CON PROPORCIÓN 3:4 */}
       {showCameraModal && (
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between p-6 animate-fadeIn overflow-y-auto">
           <div className="w-full max-w-sm flex justify-between items-center py-2">
-            <span className="text-[10px] text-white font-bold uppercase tracking-widest">ENCUADRE 9:16</span>
+            <span className="text-[10px] text-white font-bold uppercase tracking-widest">CAPTURA PROGRESO</span>
             <div className="flex gap-2 items-center">
               <button onClick={toggleCameraLens} className="text-xs bg-white/20 text-white px-3 py-1.5 rounded-full font-bold uppercase tracking-wider hover:bg-white/40 transition-colors">
                 📷 {cameraFacingMode === 'environment' ? 'Trasera' : 'Frontal'}
@@ -2158,9 +2161,10 @@ export default function App() {
             </div>
           </div>
 
-          <div className="relative w-full max-w-sm aspect-[9/16] bg-black rounded-[2rem] overflow-hidden border border-white/20 flex items-center justify-center my-auto shadow-2xl">
+          <div className="relative w-full max-w-sm aspect-[3/4] bg-black rounded-[2rem] overflow-hidden border border-white/20 flex items-center justify-center my-auto shadow-2xl">
             <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
             
+            {/* OVERLAY ANATÓMICO SILUETA HUMANA */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-4 transition-opacity" style={{ opacity: overlayOpacity }}>
               <svg viewBox="0 0 100 200" className="w-full h-full stroke-white/80 fill-none" strokeWidth="0.8" strokeDasharray="2 1">
                 <ellipse cx="50" cy="24" rx="8" ry="10" />
@@ -2401,7 +2405,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE AJUSTES ROBUSTO Y SEGURADO */}
+      {/* MODAL DE AJUSTES Y CONFIGURACIÓN CORREGIDO */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -2545,7 +2549,7 @@ export default function App() {
                 <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-2`}>Equipamiento Disponible</label>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
                   {AVAILABLE_EQUIPMENT_OPTIONS.map((equip) => {
-                    const selected = (editProfile?.equipamientoArray || ['mancuernas']).includes(equip.id);
+                    const selected = Array.isArray(editProfile?.equipamientoArray) && editProfile.equipamientoArray.includes(equip.id);
                     return (
                       <button
                         key={equip.id}
