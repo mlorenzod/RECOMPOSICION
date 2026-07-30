@@ -521,6 +521,13 @@ export default function App() {
     return saved ? JSON.parse(saved) : {};
   });
 
+  const [dailySteps, setDailySteps] = useState(() => {
+    const saved = localStorage.getItem(`${userKey}_daily_steps`);
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  const [stepGoal] = useState(10000);
+
   const [logs, setLogs] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_workout_logs`);
     return saved ? JSON.parse(saved) : {};
@@ -544,23 +551,57 @@ export default function App() {
   const [strategyReport, setStrategyReport] = useState(null);
   const [showStrategyModal, setShowStrategyModal] = useState(false);
 
-  // ESTADOS DE NUTRICIÓN
+  // ESTADOS DE NUTRICIÓN ADAPTATIVA Y EVENTOS
   const [nutritionViewMode, setNutritionViewMode] = useState('daily');
-  const [showMacroBreakdownChart, setShowMacroBreakdownChart] = useState(true); // Desplegado por defecto
+  const [showMacroBreakdownChart, setShowMacroBreakdownChart] = useState(true);
   const [showCustomIngredientForm, setShowCustomIngredientForm] = useState(false);
   const [newIngredientName, setNewIngredientName] = useState('');
   const [newIngredientUnit, setNewIngredientNameUnit] = useState('g');
   const [newIngredientQty, setNewIngredientQty] = useState('100');
   const [isCalculatingNewIngredient, setIsCalculatingNewIngredient] = useState(false);
 
-  // ESTADO REEMPLAZAR EJERCICIO CON IA
-  const [replacingExerciseId, setReplacingExerciseId] = useState(null);
+  const [cycleMacrosByWorkout, setCycleMacrosByWorkout] = useState(true);
+  const [showSocialCompensationModal, setShowSocialCompensationModal] = useState(false);
+  const [eventExtraCalories, setEventExtraCalories] = useState('600');
 
-  // CÁMARA TRASERA / FRONTAL PARA PROGRESO
-  const [cameraFacingMode, setCameraFacingMode] = useState("environment");
+  // CONTROL HORARIO (23:00 HRS ALERTA DIARIA)
+  const [currentHour, setCurrentHour] = useState(new Date().getHours());
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentHour(new Date().getHours()), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
-  // CÁLCULO DINÁMICO DE MACROS OBJETIVO
-  const baseTargetMacros = userProfile?.customMacros || calculateScienceMacros(userProfile);
+  const isNightCheckTime = currentHour >= 23;
+
+  // CÁLCULO DINÁMICO DE MACROS OBJETIVO CON CICLADO Y EVENTOS
+  const isTrainingDay = (dayNum) => {
+    const dayOfWeek = ((dayNum - 1) % 7) + 1;
+    return workoutPlan.days.includes(dayOfWeek);
+  };
+
+  const getBaseScienceMacros = () => userProfile?.customMacros || calculateScienceMacros(userProfile);
+
+  const calculateAdaptedTargetMacros = () => {
+    const base = getBaseScienceMacros();
+    let adaptedCal = base.cal;
+    let adaptedCarbs = base.carbs;
+    let adaptedProtein = base.protein;
+    let adaptedFat = base.fat;
+
+    if (cycleMacrosByWorkout) {
+      if (isTrainingDay(selectedDay)) {
+        adaptedCal = Math.round(base.cal * 1.08); // +8% Kcal en día de entreno
+        adaptedCarbs = Math.round(base.carbs * 1.15); // +15% Carbs
+      } else {
+        adaptedCal = Math.round(base.cal * 0.92); // -8% Kcal en descanso
+        adaptedCarbs = Math.round(base.carbs * 0.85); // -15% Carbs
+      }
+    }
+
+    return { cal: adaptedCal, protein: adaptedProtein, carbs: adaptedCarbs, fat: adaptedFat };
+  };
+
+  const baseTargetMacros = calculateAdaptedTargetMacros();
   
   const isWeeklyView = nutritionViewMode === 'weekly';
   const targetMacros = isWeeklyView ? {
@@ -595,6 +636,7 @@ export default function App() {
     if (userProfile) {
       localStorage.setItem(`${userKey}_body_logs`, JSON.stringify(bodyLogs));
       localStorage.setItem(`${userKey}_nutrition_logs`, JSON.stringify(dailyNutritionLogs));
+      localStorage.setItem(`${userKey}_daily_steps`, JSON.stringify(dailySteps));
       localStorage.setItem(`${userKey}_workout_logs`, JSON.stringify(logs));
       localStorage.setItem(`${userKey}_xp`, userXP.toString());
       localStorage.setItem(`${userKey}_photos`, JSON.stringify(userPhotos));
@@ -602,8 +644,10 @@ export default function App() {
       localStorage.setItem(`${userKey}_workout_plan`, JSON.stringify(workoutPlan));
       if (workouts) localStorage.setItem(`${userKey}_workouts`, JSON.stringify(workouts));
     }
-  }, [bodyLogs, dailyNutritionLogs, logs, userXP, userPhotos, isPro, userKey, userProfile, workoutPlan, workouts]);
+  }, [bodyLogs, dailyNutritionLogs, dailySteps, logs, userXP, userPhotos, isPro, userKey, userProfile, workoutPlan, workouts]);
 
+  const [replacingExerciseId, setReplacingExerciseId] = useState(null);
+  const [cameraFacingMode, setCameraFacingMode] = useState("environment");
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [showManagePhotosModal, setShowManagePhotosModal] = useState(false);
@@ -638,7 +682,6 @@ export default function App() {
   const [scanResult, setScanResult] = useState(null);
   const [textFoodInput, setTextFoodInput] = useState('');
   
-  // ESTADOS DE CONTROL DE AUDIO INTERACTIVO
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [audioBlob, setAudioBlob] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
@@ -655,7 +698,6 @@ export default function App() {
   const [trackerChest, setTrackerChest] = useState('');
   const [trackerArm, setTrackerArm] = useState('');
 
-  // NORMALIZACIÓN DE IMAGEN CON CANVAS (UNIFICA GALERÍA Y CÁMARA)
   const compressImageForAI = (file, maxWidth = 800) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -675,7 +717,6 @@ export default function App() {
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           
-          // Limpiar fondo a negro antes de dibujar por transparencia en PNGs
           ctx.fillStyle = "#000000";
           ctx.fillRect(0, 0, width, height);
           ctx.drawImage(img, 0, 0, width, height);
@@ -720,10 +761,10 @@ export default function App() {
     const obj = (profile.objetivo || '').toLowerCase();
 
     if (obj.includes('ganar') && custom.cal < science.cal - 100) {
-      return "⚠️ Contradicción detectada: Has seleccionado 'Ganar Músculo', pero tus calorías fijadas están por debajo de tu gasto calórico diario. Para ganar masa muscular eficientemente se suele recomendar un ligero superávit calórico (Mifflin-St Jeor). Puedes mantener tu cifra si sigues un protocolo personalizado.";
+      return "⚠️ Contradicción detectada: Has seleccionado 'Ganar Músculo', pero tus calorías fijadas están por debajo de tu gasto calórico diario.";
     }
     if (obj.includes('perder') && custom.cal > science.cal + 100) {
-      return "⚠️ Contradicción detectada: Has seleccionado 'Perder Grasa', pero tus calorías objetivo superan tu tasa metabólica recomendada en déficit. Puedes ajustar libremente la cifra según tu criterio o fuente nutricional.";
+      return "⚠️ Contradicción detectada: Has seleccionado 'Perder Grasa', pero tus calorías objetivo superan tu tasa metabólica recomendada en déficit.";
     }
     return null;
   };
@@ -984,7 +1025,6 @@ export default function App() {
     } 
   };
 
-  // CONTROL INTERACTIVO DE GRABACIÓN Y PREVIEW DE AUDIO
   const startAudioRecording = async () => {
     if (!verifyAccessOrShowPaywall()) return;
     try {
@@ -1310,14 +1350,18 @@ export default function App() {
     alert(`¡Medidas guardadas correctamente para el Día ${selectedDay}!`);
   };
 
+  const handleApplySocialCompensation = () => {
+    const extra = parseInt(eventExtraCalories) || 0;
+    if (extra <= 0) return;
+
+    const dailyDeduction = Math.round(extra / 6);
+    alert(`¡Compensación Calculada! Para cubrir tu evento de +${extra} kcal, mantendremos un ajuste de -${dailyDeduction} kcal/día en tus días restantes para mantener tu balance de 7 días intacto.`);
+    setShowSocialCompensationModal(false);
+  };
+
   const handlePlanGenerated = (plan) => {
     setWorkoutPlan(plan);
     localStorage.setItem(`${userKey}_workout_plan`, JSON.stringify(plan));
-  };
-
-  const isTrainingDay = (dayNum) => {
-    const dayOfWeek = ((dayNum - 1) % 7) + 1;
-    return workoutPlan.days.includes(dayOfWeek);
   };
 
   const getDayExercises = (dayNum) => {
@@ -1389,13 +1433,16 @@ export default function App() {
   const scanTotalCarbs = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.carbs || 0), 0) : 0;
   const scanTotalFat = scanResult ? scanResult.foods.reduce((acc, curr) => acc + (curr.fat || 0), 0) : 0;
 
+  const currentStepsCount = dailySteps[selectedDay] || 0;
+  const isSevenDayCycle = selectedDay % 7 === 0;
+
   return (
     <div style={rootStyle} className={`min-h-screen ${theme.bg} ${theme.text} flex flex-col justify-between select-none relative transition-colors duration-500`}>
       <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleMultipleFileUpload} />
       <input type="file" ref={mealFileInputRef} accept="image/*" className="hidden" onChange={handleMealImageUpload} />
       <input type="file" ref={mealCameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleMealImageUpload} />
 
-      {/* OVERLAY / SPINNER DE CARGA AL ANALIZAR CON IA */}
+      {/* OVERLAY DE CARGA DE IA */}
       {isScanning && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 animate-fadeIn">
           <div className="bg-[#111] border border-white/10 rounded-[2.5rem] p-8 max-w-xs w-full flex flex-col items-center space-y-6 text-center shadow-2xl">
@@ -1408,24 +1455,34 @@ export default function App() {
         </div>
       )}
 
-      {/* HEADER */}
-      <header className={`sticky top-0 z-40 ${theme.navBg} backdrop-blur-xl border-b ${theme.border} px-6 py-4 flex justify-between items-center transition-colors duration-500`}>
-        <div>
-          <span className={`text-[9px] font-bold tracking-[0.2em] ${theme.muted} uppercase block mb-1`}>ATLETA: {userProfile?.name || 'Atleta'}</span>
-          <h1 className="text-xl font-black tracking-tight flex items-center gap-2">
-            STUDIO <span className={`text-[10px] px-3 py-1 rounded-full border ${theme.border} ${theme.muted} font-bold uppercase tracking-widest`}>DÍA {selectedDay}</span>
-          </h1>
+      {/* HEADER CON AVISO NOCTURNO (23:00 HRS) */}
+      <header className={`sticky top-0 z-40 ${theme.navBg} backdrop-blur-xl border-b ${theme.border} px-6 py-4 flex flex-col gap-2 transition-colors duration-500`}>
+        <div className="flex justify-between items-center">
+          <div>
+            <span className={`text-[9px] font-bold tracking-[0.2em] ${theme.muted} uppercase block mb-1`}>ATLETA: {userProfile?.name || 'Atleta'}</span>
+            <h1 className="text-xl font-black tracking-tight flex items-center gap-2">
+              STUDIO <span className={`text-[10px] px-3 py-1 rounded-full border ${theme.border} ${theme.muted} font-bold uppercase tracking-widest`}>DÍA {selectedDay}</span>
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setIsDark(!isDark)} className={`p-2.5 ${theme.secondary} rounded-full text-[12px]`}>{isDark ? '☀️' : '🌙'}</button>
+            <button onClick={() => setShowSettingsModal(true)} className={`p-2.5 ${theme.secondary} rounded-full text-[12px]`}>⚙️</button>
+            <button 
+              onClick={() => setShowPaywallModal(true)} 
+              className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${isDeveloper ? 'bg-purple-600 text-white border-transparent' : isPro ? 'bg-green-500 text-black border-transparent' : isTrialActive ? 'bg-blue-600 text-white border-transparent' : 'bg-red-600 text-white border-transparent'}`}
+            >
+              {isDeveloper ? 'DEV VIP' : isPro ? 'VIP PRO' : isTrialActive ? `PRO (${trialDaysLeft}d gratis)` : 'SUSCRIBIRSE'}
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setIsDark(!isDark)} className={`p-2.5 ${theme.secondary} rounded-full text-[12px]`}>{isDark ? '☀️' : '🌙'}</button>
-          <button onClick={() => setShowSettingsModal(true)} className={`p-2.5 ${theme.secondary} rounded-full text-[12px]`}>⚙️</button>
-          <button 
-            onClick={() => setShowPaywallModal(true)} 
-            className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${isDeveloper ? 'bg-purple-600 text-white border-transparent' : isPro ? 'bg-green-500 text-black border-transparent' : isTrialActive ? 'bg-blue-600 text-white border-transparent' : 'bg-red-600 text-white border-transparent'}`}
-          >
-            {isDeveloper ? 'DEV VIP' : isPro ? 'VIP PRO' : isTrialActive ? `PRO (${trialDaysLeft}d gratis)` : 'SUSCRIBIRSE'}
-          </button>
-        </div>
+
+        {/* ALERTA DE LAS 23:00 HRS */}
+        {isNightCheckTime && (
+          <div className="bg-amber-500/10 border border-amber-500/30 p-2.5 rounded-2xl flex items-center justify-between text-[10px] text-amber-400 font-bold animate-pulse">
+            <span>🌙 23:00 hrs: Hora del cierre diario. ¡Registra tus pasos y entreno!</span>
+            <span className="text-xs">⏳</span>
+          </div>
+        )}
       </header>
 
       {/* TABS NAVEGACIÓN */}
@@ -1497,24 +1554,43 @@ export default function App() {
               </div>
             </div>
 
+            {/* CONTROL Y REGISTRO DE PASOS DIARIOS (NEAT) */}
+            <div className={`${theme.card} border ${theme.border} rounded-[2rem] p-6 space-y-4 ${theme.shadow}`}>
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block`}>Actividad Diaria (NEAT)</span>
+                  <h3 className="text-lg font-black">Registro de Pasos</h3>
+                </div>
+                <span className="text-xs font-extrabold px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full">
+                  Meta: 10,000
+                </span>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <input 
+                  type="number" 
+                  value={currentStepsCount || ''} 
+                  onChange={(e) => setDailySteps({ ...dailySteps, [selectedDay]: parseInt(e.target.value) || 0 })}
+                  placeholder="Ej. 8500" 
+                  className={`flex-1 bg-transparent border-b ${theme.border} py-2 text-2xl font-black outline-none`}
+                />
+                <span className={`text-xs ${theme.muted} font-bold`}>Pasos</span>
+              </div>
+
+              <div className={`h-2.5 w-full ${isDark ? 'bg-gray-800' : 'bg-gray-200'} rounded-full overflow-hidden`}>
+                <div 
+                  className="h-full bg-emerald-500 transition-all duration-500" 
+                  style={{ width: `${Math.min(100, (currentStepsCount / stepGoal) * 100)}%` }}
+                ></div>
+              </div>
+            </div>
+
             <button
               onClick={() => setShowPlanner(true)}
               className="w-full py-4 rounded-full text-xs font-black uppercase tracking-widest bg-[#222] border border-white/10 text-white hover:bg-white hover:text-black transition-all"
             >
               {workoutPlan.days.length > 0 ? 'Cambiar plan de entrenamiento' : 'Planificar entrenamiento'}
             </button>
-
-            <div className={`${theme.card} border ${theme.border} rounded-2xl p-4 text-xs flex justify-between items-center`}>
-              <div>
-                <span className="font-bold">{workoutPlan.days.length} días/sem</span>
-                <span className="ml-2 capitalize">{workoutPlan.focus}</span>
-              </div>
-              <div className="flex gap-2">
-                {workoutPlan.days.map(d => (
-                  <span key={d} className={`px-2 py-1 ${theme.secondary} rounded-full text-[9px] font-bold`}>D{d}</span>
-                ))}
-              </div>
-            </div>
 
             <div className={`${theme.card} border ${theme.border} rounded-[2rem] p-6 flex justify-between items-center ${theme.shadow} transition-colors duration-500`}>
               <div>
@@ -1630,12 +1706,30 @@ export default function App() {
                       Semanal
                     </button>
                   </div>
-
-                  {currentMacros.cal > 0 && (
-                    <button onClick={() => { if(window.confirm('¿Reiniciar macros?')) setDailyNutritionLogs(prev => ({...prev, [selectedDay]: {cal:0, protein:0, carbs:0, fat:0}})) }} className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest underline`}>Reset</button>
-                  )}
                 </div>
               </div>
+
+              {/* BARRA DE ADAPTABILIDAD Y CICLADO DE MACROS */}
+              <div className="flex items-center justify-between bg-[#181818] p-3.5 rounded-2xl border border-white/10 text-[10px]">
+                <div className="flex items-center gap-2">
+                  <span>⚡</span>
+                  <span className="font-bold">Ciclado Nutricional (Entreno vs Rest):</span>
+                </div>
+                <button 
+                  onClick={() => setCycleMacrosByWorkout(!cycleMacrosByWorkout)}
+                  className={`px-3 py-1 rounded-full font-bold uppercase tracking-widest transition-all ${cycleMacrosByWorkout ? 'bg-emerald-500 text-black' : 'bg-gray-800 text-gray-400'}`}
+                >
+                  {cycleMacrosByWorkout ? 'ACTIVO (+Carbs)' : 'OFF'}
+                </button>
+              </div>
+
+              {/* BOTÓN DE COMPENSACIÓN POR SOCIAL / ANTOJOS */}
+              <button 
+                onClick={() => setShowSocialCompensationModal(true)}
+                className="w-full py-3 bg-[#181818] border border-blue-500/30 text-blue-400 rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-500/10 transition-all flex items-center justify-center gap-2"
+              >
+                <span>🍕</span> Compensación por Cena / Evento Especial
+              </button>
 
               <div className="flex items-center gap-6">
                 <div className="relative w-32 h-32 flex items-center justify-center flex-shrink-0">
@@ -1661,9 +1755,6 @@ export default function App() {
                     <div className={`h-2 ${isDark ? 'bg-gray-900' : 'bg-gray-200'} rounded-full overflow-hidden`}>
                       <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.protein / targetMacros.protein) * 100)}%` }}></div>
                     </div>
-                    <div className="text-[8px] text-right font-semibold">
-                      {targetMacros.protein - currentMacros.protein > 0 ? <span className="text-emerald-500">Quedan {targetMacros.protein - currentMacros.protein}g</span> : <span className="text-gray-400">Meta cumplida</span>}
-                    </div>
                   </div>
 
                   <div className="space-y-1">
@@ -1674,9 +1765,6 @@ export default function App() {
                     <div className={`h-2 ${isDark ? 'bg-gray-900' : 'bg-gray-200'} rounded-full overflow-hidden`}>
                       <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.carbs / targetMacros.carbs) * 100)}%` }}></div>
                     </div>
-                    <div className="text-[8px] text-right font-semibold">
-                      {targetMacros.carbs - currentMacros.carbs > 0 ? <span className="text-blue-500">Quedan {targetMacros.carbs - currentMacros.carbs}g</span> : <span className="text-gray-400">Meta cumplida</span>}
-                    </div>
                   </div>
 
                   <div className="space-y-1">
@@ -1686,9 +1774,6 @@ export default function App() {
                     </div>
                     <div className={`h-2 ${isDark ? 'bg-gray-900' : 'bg-gray-200'} rounded-full overflow-hidden`}>
                       <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${Math.min(100, (currentMacros.fat / targetMacros.fat) * 100)}%` }}></div>
-                    </div>
-                    <div className="text-[8px] text-right font-semibold">
-                      {targetMacros.fat - currentMacros.fat > 0 ? <span className="text-amber-500">Quedan {targetMacros.fat - currentMacros.fat}g</span> : <span className="text-gray-400">Meta cumplida</span>}
                     </div>
                   </div>
                 </div>
@@ -1716,7 +1801,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* MODAL DE GRABACIÓN DE AUDIO ACTIVA */}
+                {/* MODAL GRABACIÓN AUDIO */}
                 {isRecordingAudio && (
                   <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-between animate-pulse">
                     <div className="flex items-center gap-3">
@@ -1733,7 +1818,7 @@ export default function App() {
                   </div>
                 )}
 
-                {/* PANEL DE VISTA PREVIA Y CONTROL DE AUDIO GRABADO */}
+                {/* PREVIEW AUDIO GRABADO */}
                 {audioBlob && !isRecordingAudio && (
                   <div className={`p-4 ${theme.secondary} border border-emerald-500/40 rounded-2xl space-y-3 animate-fadeIn`}>
                     <div className="flex justify-between items-center border-b border-white/10 pb-2">
@@ -1788,7 +1873,7 @@ export default function App() {
               </form>
             </div>
 
-            {/* TARJETA DE CONFIRMACIÓN CON SLIDERS, SUMATORIO TOTAL Y UNIDADES */}
+            {/* CONFIRMACIÓN CON SLIDERS Y SUMATORIO TOTAL */}
             {scanResult && (
               <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-6 space-y-6 animate-fadeIn ${theme.shadow} relative overflow-hidden`}>
                 <div className={`flex items-start justify-between border-b ${theme.border} pb-4`}>
@@ -1803,18 +1888,6 @@ export default function App() {
                   </div>
                   <span className="text-2xl">🥗</span>
                 </div>
-
-                {scanResult.img && (
-                  <div className={`relative w-full h-40 rounded-2xl overflow-hidden border ${theme.border}`}>
-                    <img src={scanResult.img} alt="Vista del plato" className="w-full h-full object-cover" />
-                  </div>
-                )}
-
-                {scanResult.goalFeedback && (
-                  <div className={`p-4 ${isDark ? 'bg-emerald-950/30 border-emerald-800/30 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-900'} border rounded-2xl text-xs font-medium italic`}>
-                    "{scanResult.goalFeedback}"
-                  </div>
-                )}
 
                 {/* SUMATORIO TOTAL DE VALORES DEL PLATO */}
                 <div className={`p-4 ${theme.secondary} rounded-2xl border ${theme.border} space-y-2`}>
@@ -1838,15 +1911,14 @@ export default function App() {
 
                 {showMacroBreakdownChart && (
                   <div className={`p-4 ${theme.secondary} rounded-2xl border ${theme.border} space-y-3 animate-fadeIn`}>
-                    <span className={`text-[9px] ${theme.muted} font-bold uppercase tracking-widest block border-b ${theme.border} pb-2`}>Aporte (%) por ingrediente al total del plato</span>
+                    <span className={`text-[9px] ${theme.muted} font-bold uppercase tracking-widest block border-b ${theme.border} pb-2`}>Aporte (%) por ingrediente</span>
                     {scanResult.foods.map((f, idx) => {
                       const calPercent = scanTotalCal > 0 ? Math.round((f.cal / scanTotalCal) * 100) : 0;
-                      const protPercent = scanTotalProt > 0 ? Math.round((f.prot / scanTotalProt) * 100) : 0;
                       return (
                         <div key={idx} className="space-y-1.5 text-[10px]">
                           <div className="flex justify-between font-bold">
                             <span className="truncate max-w-[150px]">{f.name}</span>
-                            <span className={theme.muted}>{f.cal} kcal ({calPercent}%) · {f.prot}g Prot ({protPercent}%)</span>
+                            <span className={theme.muted}>{f.cal} kcal ({calPercent}%)</span>
                           </div>
                           <div className={`h-1.5 w-full ${isDark ? 'bg-gray-800' : 'bg-gray-200'} rounded-full overflow-hidden`}>
                             <div className={`h-full ${isDark ? 'bg-white' : 'bg-black'} transition-all duration-300`} style={{ width: `${calPercent}%` }}></div>
@@ -1858,74 +1930,8 @@ export default function App() {
                 )}
 
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest`}>Ajustar Cantidades con Barra</span>
-                    <button 
-                      type="button"
-                      onClick={() => setShowCustomIngredientForm(!showCustomIngredientForm)} 
-                      className={`text-[10px] font-bold ${theme.text} hover:opacity-70 flex items-center gap-1 transition-opacity`}
-                    >
-                      <span>+</span> {showCustomIngredientForm ? 'Cancelar' : 'Añadir ingrediente'}
-                    </button>
-                  </div>
-
-                  {showCustomIngredientForm && (
-                    <div className={`p-4 ${theme.secondary} rounded-2xl border border-blue-500/30 space-y-3 animate-fadeIn`}>
-                      <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block">Consultar Ingrediente a la IA</span>
-                      
-                      <div className="space-y-2">
-                        <input 
-                          type="text" 
-                          placeholder="Ej. Aceite de oliva, Pan integral..." 
-                          value={newIngredientName} 
-                          onChange={(e) => setNewIngredientName(e.target.value)}
-                          className={`w-full bg-transparent border-b ${theme.border} py-2 text-xs font-bold ${theme.text} outline-none`}
-                        />
-                        
-                        <div className="flex gap-2 items-center">
-                          <div className="flex-1 flex gap-2 items-center">
-                            <input 
-                              type="number" 
-                              value={newIngredientQty} 
-                              onChange={(e) => setNewIngredientQty(e.target.value)}
-                              className={`w-16 bg-transparent border-b ${theme.border} py-1 text-xs font-black text-center ${theme.text}`}
-                            />
-                            <div className={`flex ${theme.card} rounded-lg p-0.5 border ${theme.border} text-[9px] font-bold`}>
-                              <button 
-                                type="button" 
-                                onClick={() => setNewIngredientNameUnit('g')} 
-                                className={`px-2 py-0.5 rounded ${newIngredientUnit === 'g' ? theme.primary : theme.muted}`}
-                              >
-                                g
-                              </button>
-                              <button 
-                                type="button" 
-                                onClick={() => setNewIngredientNameUnit('ud')} 
-                                className={`px-2 py-0.5 rounded ${newIngredientUnit === 'ud' ? theme.primary : theme.muted}`}
-                              >
-                                ud
-                              </button>
-                            </div>
-                          </div>
-
-                          <button 
-                            type="button" 
-                            onClick={calculateCustomIngredientWithGemini}
-                            disabled={isCalculatingNewIngredient}
-                            className={`px-4 py-2 ${theme.primary} font-black text-[9px] uppercase tracking-widest rounded-xl hover:scale-105 transition-all flex items-center gap-1`}
-                          >
-                            {isCalculatingNewIngredient ? 'Calculando...' : 'Calcular con IA ✨'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
                   {scanResult.foods.map((f, i) => {
                     const isUnits = f.unitType === 'ud';
-                    const maxSliderVal = isUnits ? 10 : 500;
-                    const stepVal = isUnits ? 0.5 : 5;
-
                     return (
                       <div key={i} className={`space-y-3 ${theme.secondary} p-4 rounded-2xl border ${theme.border}`}>
                         <div className="flex items-center justify-between gap-2">
@@ -1935,24 +1941,6 @@ export default function App() {
                             onChange={(e) => handleFoodNameChange(i, e.target.value)}
                             className={`font-bold text-sm bg-transparent border-b ${theme.border} ${theme.text} outline-none flex-1`}
                           />
-                          
-                          <div className={`flex ${theme.card} rounded-xl p-1 border ${theme.border} text-[9px] font-bold`}>
-                            <button 
-                              type="button"
-                              onClick={() => handleUnitTypeToggle(i, 'g')}
-                              className={`px-2.5 py-1 rounded-lg transition-all ${!isUnits ? theme.primary : theme.muted}`}
-                            >
-                              Gramos
-                            </button>
-                            <button 
-                              type="button"
-                              onClick={() => handleUnitTypeToggle(i, 'ud')}
-                              className={`px-2.5 py-1 rounded-lg transition-all ${isUnits ? theme.primary : theme.muted}`}
-                            >
-                              Unidades
-                            </button>
-                          </div>
-
                           <button onClick={() => handleRemoveFoodItem(i)} title="Eliminar ingrediente" className={`${theme.muted} hover:text-red-500 text-xs p-1 transition-colors`}>
                             🗑️
                           </button>
@@ -1969,19 +1957,12 @@ export default function App() {
                           <input 
                             type="range" 
                             min={isUnits ? "0.5" : "5"} 
-                            max={maxSliderVal} 
-                            step={stepVal}
+                            max={isUnits ? 10 : 500} 
+                            step={isUnits ? 0.5 : 5}
                             value={f.grams} 
                             onChange={(e) => handleFoodQuantityChange(i, e.target.value)}
                             className={`w-full h-2 rounded-lg cursor-pointer ${isDark ? 'accent-white bg-gray-800' : 'accent-black bg-gray-200'}`}
                           />
-                        </div>
-
-                        <div className={`font-semibold uppercase tracking-wider text-[9px] flex justify-between pt-2 border-t ${theme.border}`}>
-                          <span className={theme.text}>🔥 {f.cal} kcal</span>
-                          <span className="text-emerald-500 font-bold">🥩 {f.prot}g P</span>
-                          <span className="text-blue-500 font-bold">🍞 {f.carbs}g C</span>
-                          <span className="text-amber-500 font-bold">🥑 {f.fat}g F</span>
                         </div>
                       </div>
                     );
@@ -2020,105 +2001,15 @@ export default function App() {
                 </button>
               </div>
 
-              {recipeError && <div className="text-xs text-red-500 font-medium p-2">{recipeError}</div>}
-
-              {personalizedRecipe ? (
+              {personalizedRecipe && (
                 <div className={`border ${theme.border} rounded-[2rem] overflow-hidden space-y-6 pb-6 animate-fadeIn ${theme.secondary}`}>
                   <div className="relative h-64 w-full overflow-hidden group">
                     <img src={personalizedRecipe.img} alt={personalizedRecipe.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent p-6 flex flex-col justify-end">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="bg-white/20 backdrop-blur-md text-white px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest">⏱️ {personalizedRecipe.prepTime || '15 min'}</span>
-                        <span className="bg-white/20 backdrop-blur-md text-white px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest">🔥 {personalizedRecipe.cal} KCAL</span>
-                      </div>
                       <h3 className="text-2xl font-black text-white leading-tight">{personalizedRecipe.title}</h3>
                     </div>
                   </div>
-                  
-                  <div className="px-6 space-y-6">
-                    <div className={`grid grid-cols-3 gap-2 text-center p-3 ${theme.card} rounded-2xl border ${theme.border}`}>
-                      <div>
-                        <span className={`text-[9px] ${theme.muted} font-bold uppercase block`}>Proteína</span>
-                        <span className="text-sm font-black text-emerald-500">{personalizedRecipe.prot}g</span>
-                      </div>
-                      <div>
-                        <span className={`text-[9px] ${theme.muted} font-bold uppercase block`}>Carbs</span>
-                        <span className="text-sm font-black text-blue-500">{personalizedRecipe.carbs}g</span>
-                      </div>
-                      <div>
-                        <span className={`text-[9px] ${theme.muted} font-bold uppercase block`}>Grasas</span>
-                        <span className="text-sm font-black text-amber-500">{personalizedRecipe.fat}g</span>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h4 className={`text-[10px] font-bold ${theme.muted} uppercase tracking-widest mb-3 flex items-center gap-2`}>
-                        <span>🥘</span> Ingredientes
-                      </h4>
-                      <div className="grid grid-cols-1 gap-2">
-                        {personalizedRecipe.ingredients?.map((ing, i) => (
-                          <div key={i} className={`text-xs font-medium p-3 ${theme.card} rounded-xl border ${theme.border} flex items-center gap-3`}>
-                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                            {ing}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h4 className={`text-[10px] font-bold ${theme.muted} uppercase tracking-widest mb-3 flex items-center gap-2`}>
-                        <span>👨‍🍳</span> Paso a Paso
-                      </h4>
-                      <div className="space-y-3">
-                        {personalizedRecipe.steps ? (
-                          personalizedRecipe.steps.map((step, i) => (
-                            <div key={i} className={`p-4 ${theme.card} rounded-2xl border ${theme.border} space-y-1`}>
-                              <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">PASO {i + 1}</span>
-                              <p className="text-xs leading-relaxed font-medium">{step}</p>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-xs leading-relaxed">{personalizedRecipe.instructions}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {personalizedRecipe.chefTip && (
-                      <div className={`p-4 rounded-2xl border border-blue-500/30 bg-blue-500/5 text-blue-600 dark:text-blue-400 text-xs flex gap-3 items-start`}>
-                        <span className="text-base">🔬</span>
-                        <div>
-                          <strong className="block font-bold uppercase text-[9px] tracking-wider mb-1">Ciencia Aplicada</strong>
-                          <p className="font-light italic">{personalizedRecipe.chefTip}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    <button 
-                      onClick={() => {
-                        setDailyNutritionLogs(prev => ({
-                          ...prev,
-                          [selectedDay]: {
-                            cal: (prev[selectedDay]?.cal || 0) + personalizedRecipe.cal,
-                            protein: (prev[selectedDay]?.protein || 0) + personalizedRecipe.prot,
-                            carbs: (prev[selectedDay]?.carbs || 0) + personalizedRecipe.carbs,
-                            fat: (prev[selectedDay]?.fat || 0) + personalizedRecipe.fat
-                          }
-                        }));
-                        alert('¡Añadida a tus macros!');
-                      }} 
-                      className={`w-full py-4 ${theme.primary} font-black rounded-full text-[10px] uppercase tracking-widest shadow-lg`}
-                    >
-                      Añadir a mis macros
-                    </button>
-                  </div>
                 </div>
-              ) : (
-                 <div className="text-center py-8 space-y-3">
-                   <span className="text-4xl block">🔬</span>
-                   <p className={`text-xs ${theme.muted} font-medium leading-relaxed max-w-xs mx-auto`}>
-                     La IA calculará una receta usando la Ecuación de Mifflin-St Jeor para rellenar tus requerimientos de hoy.
-                   </p>
-                 </div>
               )}
             </div>
 
@@ -2133,6 +2024,17 @@ export default function App() {
               {isAnalyzingStrategy ? 'Analizando Datos...' : 'Generar Reporte Clínico'}
             </button>
             
+            {/* AVISO AUTOMÁTICO DE REGISTRO CADA 7 DÍAS */}
+            {isSevenDayCycle && (
+              <div className="p-5 bg-purple-500/10 border border-purple-500/30 rounded-[2rem] space-y-2 animate-pulse">
+                <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest block">📅 Cierre de Ciclo - Día {selectedDay}</span>
+                <h4 className="text-sm font-black text-white">¡Momento de Medición Semanal!</h4>
+                <p className="text-xs text-gray-300 font-medium leading-relaxed">
+                  Hoy se cumplen 7 días de proceso. Por favor, captura tu foto visual y toma tus medidas corporales (cintura, peso) para reajustar los macros con precisión.
+                </p>
+              </div>
+            )}
+
             {/* SECCIÓN FOTOS */}
             <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-6 space-y-6 ${theme.shadow} transition-colors duration-500`}>
               <div className={`flex justify-between items-center border-b ${theme.border} pb-3`}>
@@ -2173,8 +2075,35 @@ export default function App() {
               </button>
             </div>
 
+            {/* 1. FORMULARIO DE REGISTRO DE MEDIDAS FÍSICAS */}
             <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
-              <span className={`text-[10px] ${theme.muted} font-bold tracking-widest block uppercase border-b ${theme.border} pb-4`}>Métricas Físicas</span>
+              <span className={`text-[10px] ${theme.muted} font-bold tracking-widest block uppercase border-b ${theme.border} pb-4`}>Registrar Evolución del Día {selectedDay}</span>
+              <div className="space-y-5">
+                <div>
+                  <label className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block mb-2`}>Peso (kg)</label>
+                  <input type="number" step="0.1" value={trackerWeight} onChange={(e) => setTrackerWeight(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-2 text-2xl font-black outline-none`} />
+                </div>
+                <div>
+                  <label className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block mb-2`}>Cintura * (cm)</label>
+                  <input type="number" required value={trackerWaist} onChange={(e) => setTrackerWaist(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-2 text-2xl font-black outline-none placeholder:${theme.muted}`} placeholder="Ej. 82.0" />
+                </div>
+                <div>
+                  <label className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block mb-2`}>Pecho (cm)</label>
+                  <input type="number" value={trackerChest} onChange={(e) => setTrackerChest(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-2 text-2xl font-black outline-none placeholder:${theme.muted}`} placeholder="Ej. 104.0" />
+                </div>
+                <div className="col-span-2">
+                  <label className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block mb-2`}>Brazo (cm)</label>
+                  <input type="number" step="0.1" value={trackerArm} onChange={(e) => setTrackerArm(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-2 text-2xl font-black outline-none placeholder:${theme.muted}`} placeholder="Ej. 36.5" />
+                </div>
+              </div>
+              <button onClick={handleSavePhysicalTracking} className={`w-full py-4 rounded-full text-[10px] font-black uppercase tracking-widest ${theme.primary} transition-transform hover:scale-105 shadow-lg mt-4`}>
+                Guardar Día {selectedDay}
+              </button>
+            </div>
+
+            {/* 2. GRÁFICA DE MÉTRICAS FÍSICAS */}
+            <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
+              <span className={`text-[10px] ${theme.muted} font-bold tracking-widest block uppercase border-b ${theme.border} pb-4`}>Gráfica de Métricas Físicas</span>
               
               <div className="grid grid-cols-4 gap-2 text-[10px]">
                 {['weight', 'waist', 'chest', 'arm'].map((m) => (
@@ -2186,7 +2115,7 @@ export default function App() {
 
               <div className={`h-40 ${theme.secondary} rounded-[2rem] border ${theme.border} p-5 flex items-end justify-between gap-3`}>
                 {bodyLogs.length === 0 ? (
-                  <p className={`w-full text-center text-xs ${theme.muted} font-bold uppercase tracking-widest my-auto`}>Sin datos</p>
+                  <p className={`w-full text-center text-xs ${theme.muted} font-bold uppercase tracking-widest my-auto`}>Sin datos registrados</p>
                 ) : (
                   bodyLogs.map((log, idx) => {
                     const val = log[selectedMetric] || 0;
@@ -2207,6 +2136,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* 3. GRÁFICA DE CARGAS DE ENTRENAMIENTO */}
             <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
               <div className={`flex justify-between items-center border-b ${theme.border} pb-4`}>
                 <span className={`text-[10px] ${theme.muted} font-bold tracking-widest block uppercase`}>Cargas Entrenamiento</span>
@@ -2235,31 +2165,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* FORMULARIO DE MEDIDAS FÍSICAS */}
-            <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
-              <span className={`text-[10px] ${theme.muted} font-bold tracking-widest block uppercase border-b ${theme.border} pb-4`}>Registrar Evolución del Día {selectedDay}</span>
-              <div className="space-y-5">
-                <div>
-                  <label className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block mb-2`}>Peso (kg)</label>
-                  <input type="number" step="0.1" value={trackerWeight} onChange={(e) => setTrackerWeight(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-2 text-2xl font-black outline-none`} />
-                </div>
-                <div>
-                  <label className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block mb-2`}>Cintura * (cm)</label>
-                  <input type="number" required value={trackerWaist} onChange={(e) => setTrackerWaist(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-2 text-2xl font-black outline-none placeholder:${theme.muted}`} placeholder="Ej. 82.0" />
-                </div>
-                <div>
-                  <label className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block mb-2`}>Pecho (cm)</label>
-                  <input type="number" value={trackerChest} onChange={(e) => setTrackerChest(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-2 text-2xl font-black outline-none placeholder:${theme.muted}`} placeholder="Ej. 104.0" />
-                </div>
-                <div className="col-span-2">
-                  <label className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block mb-2`}>Brazo (cm)</label>
-                  <input type="number" step="0.1" value={trackerArm} onChange={(e) => setTrackerArm(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-2 text-2xl font-black outline-none placeholder:${theme.muted}`} placeholder="Ej. 36.5" />
-                </div>
-              </div>
-              <button onClick={handleSavePhysicalTracking} className={`w-full py-4 rounded-full text-[10px] font-black uppercase tracking-widest ${theme.primary} transition-transform hover:scale-105 shadow-lg mt-4`}>
-                Guardar Día {selectedDay}
-              </button>
-            </div>
           </div>
         )}
       </main>
@@ -2276,16 +2181,16 @@ export default function App() {
         </div>
       </footer>
 
-      {/* MODAL CÁMARA CON ENCUADRE 3:4 */}
+      {/* MODAL CÁMARA CON ENCUADRE 3:4 Y GUÍA DE OPACIDAD */}
       {showCameraModal && (
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between p-6 animate-fadeIn overflow-y-auto">
           <div className="w-full max-w-sm flex justify-between items-center py-2">
             <span className="text-[10px] text-white font-bold uppercase tracking-widest">CAPTURA PROGRESO</span>
             <div className="flex gap-2 items-center">
-              <button onClick={toggleCameraLens} className="text-xs bg-white/20 text-white px-3 py-1.5 rounded-full font-bold uppercase tracking-wider hover:bg-white/40 transition-colors">
+              <button onClick={toggleCameraLens} className="text-xs bg-white/20 text-white px-3 py-1.5 rounded-full font-bold uppercase tracking-wider">
                 📷 {cameraFacingMode === 'environment' ? 'Trasera' : 'Frontal'}
               </button>
-              <button onClick={stopCamera} className="text-gray-500 font-bold text-xl p-2 hover:text-white transition-colors">✕</button>
+              <button onClick={stopCamera} className="text-gray-500 font-bold text-xl p-2">✕</button>
             </div>
           </div>
 
@@ -2314,12 +2219,13 @@ export default function App() {
             <input type="range" min="0.1" max="1" step="0.1" value={overlayOpacity} onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))} className="w-full accent-white" />
           </div>
 
-          <button onClick={capturePhoto} className="w-full max-w-sm py-4 bg-white text-black font-black rounded-full text-[10px] uppercase tracking-widest shadow-lg mb-4 hover:scale-105 transition-transform">
+          <button onClick={capturePhoto} className="w-full max-w-sm py-4 bg-white text-black font-black rounded-full text-[10px] uppercase tracking-widest shadow-lg mb-4">
             DISPARAR FOTO
           </button>
         </div>
       )}
 
+      {/* MODAL COMPARADOR DE CAPAS COMPLETO */}
       {showCompareModal && (
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between p-4 overflow-y-auto animate-fadeIn">
           <div className="w-full max-w-sm flex justify-between items-center py-2">
@@ -2400,6 +2306,7 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL GESTIÓN GALERÍA */}
       {showManagePhotosModal && (
         <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] flex flex-col shadow-2xl`}>
@@ -2429,6 +2336,7 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL FASES Y TROFEOS */}
       {selectedWorldModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 shadow-2xl`}>
@@ -2469,6 +2377,7 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL REPORTE CLÍNICO */}
       {showStrategyModal && strategyReport && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-8 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -2507,6 +2416,7 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL HISTÓRICO */}
       {showHistoryModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-6 max-w-sm w-full space-y-5 shadow-2xl`}>
@@ -2532,7 +2442,40 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL CONFIGURACIÓN CON PROTECCIÓN CONTRA FALLOS NULOS */}
+      {/* MODAL COMPENSACIÓN SOCIAL DE EVENTOS/ANTOJOS */}
+      {showSocialCompensationModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
+          <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 shadow-2xl`}>
+            <div className="flex justify-between items-center border-b border-white/10 pb-4">
+              <h3 className="text-lg font-black text-white">Planificador de Antojos/Cenas</h3>
+              <button onClick={() => setShowSocialCompensationModal(false)} className="text-gray-500 font-bold text-xl">✕</button>
+            </div>
+
+            <p className="text-xs text-gray-400 leading-relaxed font-medium">
+              ¿Tienes una cena o evento especial? Introduce las calorías extra estimadas y STUDIO recalculará automáticamente un ligero ajuste diario para mantener tu balance de 7 días intacto.
+            </p>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-gray-500">Exceso Estimado (kcal):</label>
+              <input 
+                type="number" 
+                value={eventExtraCalories} 
+                onChange={(e) => setEventExtraCalories(e.target.value)}
+                className="w-full bg-transparent border-b border-white/20 py-2 text-xl font-black text-white outline-none"
+              />
+            </div>
+
+            <button 
+              onClick={handleApplySocialCompensation}
+              className="w-full py-4 bg-white text-black font-black text-xs uppercase tracking-widest rounded-full shadow-lg"
+            >
+              Compensar en la Semana ✨
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIGURACIÓN PAGO Y PERFIL */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -2769,7 +2712,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ===== MODAL PLANIFICADOR ===== */}
+      {/* PLANIFICADOR DE ENTRENO */}
       <WorkoutPlannerModal
         isOpen={showPlanner}
         onClose={() => setShowPlanner(false)}
