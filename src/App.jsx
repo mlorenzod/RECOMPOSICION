@@ -423,7 +423,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  // ESTADO SEGURO DE CONFIGURACIÓN
+  // ESTADO DE CONFIGURACIÓN SEGURO CONTRA NULOS
   const [editProfile, setEditProfile] = useState(() => userProfile || {
     name: 'Atleta',
     peso: '75',
@@ -509,18 +509,22 @@ export default function App() {
     const saved = localStorage.getItem(`${userKey}_body_logs`);
     return saved ? JSON.parse(saved) : [];
   });
+
   const [dailyNutritionLogs, setDailyNutritionLogs] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_nutrition_logs`);
     return saved ? JSON.parse(saved) : {};
   });
+
   const [logs, setLogs] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_workout_logs`);
     return saved ? JSON.parse(saved) : {};
   });
+
   const [userXP, setUserXP] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_xp`);
     return saved ? Number(saved) : 0;
   });
+
   const [userPhotos, setUserPhotos] = useState(() => {
     const saved = localStorage.getItem(`${userKey}_photos`);
     return saved ? JSON.parse(saved) : {};
@@ -633,7 +637,9 @@ export default function App() {
 
   const [selectedMetric, setSelectedMetric] = useState('waist');
   const [selectedAnalyticsEx, setSelectedAnalyticsEx] = useState('bench');
-  const [trackerWeight, setTrackerWeight] = useState(userProfile?.peso || 65.0);
+  
+  // ESTADOS DE SEGUIMIENTO FÍSICO CORREGIDOS
+  const [trackerWeight, setTrackerWeight] = useState(userProfile?.peso || '75');
   const [trackerWaist, setTrackerWaist] = useState('');
   const [trackerChest, setTrackerChest] = useState('');
   const [trackerArm, setTrackerArm] = useState('');
@@ -1188,7 +1194,6 @@ export default function App() {
     e.target.value = '';
   };
 
-  // CÁMARA NATIIVA SIN ZOOM FORZADO CON PROPORCIÓN DE ENCUADRE 3:4
   const startCamera = async () => {
     setShowCameraModal(true);
     setTimeout(async () => {
@@ -1196,7 +1201,6 @@ export default function App() {
         if (videoRef.current?.srcObject) {
           videoRef.current.srcObject.getTracks().forEach(t => t.stop());
         }
-        // Eliminado aspectRatio rígido 9/16 que causaba zoom óptico
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cameraFacingMode } }); 
         if (videoRef.current) videoRef.current.srcObject = stream; 
       } catch (err) { 
@@ -1256,17 +1260,22 @@ export default function App() {
     setScanResult(null);
   };
 
+  // REGISTRO Y PERSISTENCIA DIRECTA DE MEDIDAS FÍSICAS
   const handleSavePhysicalTracking = () => {
     if (!trackerWaist) return alert('Cintura requerida para el historial clínico.');
-    setBodyLogs([...bodyLogs.filter(b => b.day !== selectedDay), { 
+    const newLog = { 
       day: selectedDay, 
       weight: parseFloat(trackerWeight) || 0, 
-      waist: parseFloat(trackerWaist), 
+      waist: parseFloat(trackerWaist) || 0, 
       chest: parseFloat(trackerChest) || 0,
       arm: parseFloat(trackerArm) || 0
-    }]);
+    };
+
+    const updatedLogs = [...bodyLogs.filter(b => b.day !== selectedDay), newLog].sort((a,b) => a.day - b.day);
+    setBodyLogs(updatedLogs);
+    localStorage.setItem(`${userKey}_body_logs`, JSON.stringify(updatedLogs));
     setUserXP(prev => prev + 50);
-    setTrackerWaist(''); setTrackerChest(''); setTrackerArm('');
+    alert(`¡Medidas guardadas correctamente para el Día ${selectedDay}!`);
   };
 
   const handlePlanGenerated = (plan) => {
@@ -1996,7 +2005,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ======================= MÓDULO SEGUIMIENTO (PROGRESS) ======================= */}
+        {/* ======================= MÓDULO SEGUIMIENTO (PROGRESS CORREGIDO CON FORMULARIO REACTIVO) ======================= */}
         {activeTab === 'seguimiento' && (
           <div className="space-y-8 animate-fadeIn pb-6">
             
@@ -2106,8 +2115,9 @@ export default function App() {
               </div>
             </div>
 
+            {/* FORMULARIO DE MEDIDAS FÍSICAS TOTALMENTE CONECTADO */}
             <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 space-y-6 ${theme.shadow} transition-colors duration-500`}>
-              <span className={`text-[10px] ${theme.muted} font-bold tracking-widest block uppercase border-b ${theme.border} pb-4`}>Registrar Evolución</span>
+              <span className={`text-[10px] ${theme.muted} font-bold tracking-widest block uppercase border-b ${theme.border} pb-4`}>Registrar Evolución del Día {selectedDay}</span>
               <div className="space-y-5">
                 <div>
                   <label className={`text-[10px] ${theme.muted} font-bold uppercase tracking-widest block mb-2`}>Peso (kg)</label>
@@ -2126,7 +2136,7 @@ export default function App() {
                   <input type="number" step="0.1" value={trackerArm} onChange={(e) => setTrackerArm(e.target.value)} className={`w-full bg-transparent border-b ${theme.border} py-2 text-2xl font-black outline-none placeholder:${theme.muted}`} placeholder="Ej. 36.5" />
                 </div>
               </div>
-              <button onClick={handleSavePhysicalTracking} className={`w-full py-4 rounded-full text-[10px] font-black uppercase tracking-widest ${theme.secondary} border ${theme.border} mt-4`}>
+              <button onClick={handleSavePhysicalTracking} className={`w-full py-4 rounded-full text-[10px] font-black uppercase tracking-widest ${theme.primary} transition-transform hover:scale-105 shadow-lg mt-4`}>
                 Guardar Día {selectedDay}
               </button>
             </div>
@@ -2146,9 +2156,7 @@ export default function App() {
         </div>
       </footer>
 
-      {/* ===================== MODALES ===================== */}
-      
-      {/* MODAL CÁMARA NATIIVA SIN ZOOM FORZADO CON PROPORCIÓN 3:4 */}
+      {/* MODAL CÁMARA NATIIVA SIN ZOOM FORZADO CON PROPORCIÓN DE ENCUADRE 3:4 */}
       {showCameraModal && (
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between p-6 animate-fadeIn overflow-y-auto">
           <div className="w-full max-w-sm flex justify-between items-center py-2">
@@ -2164,7 +2172,6 @@ export default function App() {
           <div className="relative w-full max-w-sm aspect-[3/4] bg-black rounded-[2rem] overflow-hidden border border-white/20 flex items-center justify-center my-auto shadow-2xl">
             <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
             
-            {/* OVERLAY ANATÓMICO SILUETA HUMANA */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-4 transition-opacity" style={{ opacity: overlayOpacity }}>
               <svg viewBox="0 0 100 200" className="w-full h-full stroke-white/80 fill-none" strokeWidth="0.8" strokeDasharray="2 1">
                 <ellipse cx="50" cy="24" rx="8" ry="10" />
@@ -2405,7 +2412,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE AJUSTES Y CONFIGURACIÓN CORREGIDO */}
+      {/* MODAL DE CONFIGURACIÓN ROBUSTO CONTRA ERRORES NULOS */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fadeIn">
           <div className={`${theme.card} border ${theme.border} rounded-[2.5rem] p-8 max-w-sm w-full space-y-6 max-h-[85vh] overflow-y-auto shadow-2xl`}>
@@ -2497,7 +2504,6 @@ export default function App() {
                 </select>
               </div>
 
-              {/* SECCIÓN INTERACTIVA CON ASESOR DE MACROS Y ADVERTENCIA TEÓRICA */}
               <div className={`p-4 ${theme.secondary} rounded-2xl border ${theme.border} space-y-3`}>
                 <div className="flex justify-between items-center border-b border-white/10 pb-2">
                   <span className="text-[10px] font-bold uppercase tracking-widest">Ajuste de Metas Diarias</span>
@@ -2544,7 +2550,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SELECTOR MÚLTIPLE DE MATERIAL */}
               <div>
                 <label className={`text-[10px] ${theme.muted} font-bold uppercase block mb-2`}>Equipamiento Disponible</label>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
